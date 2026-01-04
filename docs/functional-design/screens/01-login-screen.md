@@ -17,7 +17,7 @@
 
 ## 3. 機能・ロジック
 - **認証処理**:
-  - デモ用途として、ユーザー名 `user`、パスワード `password` で固定のバリデーション。
+  - **Supabase Auth Integration**: バックエンドAPI (`/api/auth/login`) を介して Supabase Auth で認証を行う。
   - 成功時：`求人検索画面 (/search)` へ遷移。
   - 失敗時：アラートメッセージを表示。
 - **インタラクション**:

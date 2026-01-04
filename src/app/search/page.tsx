@@ -20,6 +20,11 @@ interface SearchHistoryItem {
   created_at: string;
 }
 
+/**
+ * What: メインの検索画面コンポーネント。
+ * Why: 自然文検索、詳細フィルタリング、検索履歴管理のための統合インターフェースを提供します。
+ *      ユーザー入力、URLパラメータ、APIレスポンス間の複雑な状態相互作用を管理します。
+ */
 const SearchScreen: React.FC = () => {
   const [naturalLanguageSearch, setNaturalLanguageSearch] = useState("");
   // ページネーションとソートの状態
@@ -61,20 +66,43 @@ const SearchScreen: React.FC = () => {
       try {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
+        console.log("Session check:", !!session);
         if (session) {
           const res = await fetch('/api/history');
+          console.log("History fetch status:", res.status);
           if (res.ok) {
             const data = await res.json();
+            console.log("History data:", data);
             setSearchHistory(data);
           }
+        } else {
+            setSearchHistory([]);
         }
       } catch (error) {
         console.error("Failed to fetch history:", error);
       }
     };
+
     fetchHistory();
+    
+    // Auth状態の変更を監視
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            fetchHistory();
+        } else if (event === 'SIGNED_OUT') {
+            setSearchHistory([]);
+        }
+    });
+
+    return () => {
+        subscription.unsubscribe();
+    };
   }, []);
   
+  // 履歴保存中かどうかを管理するRef (二重保存防止)
+  const isSavingHistory = useRef(false);
+
   // 再マウント後に入力にフォーカスを当てる
   useEffect(() => {
     if (techInputKey > 0) techInputRef.current?.focus();
@@ -92,110 +120,242 @@ const SearchScreen: React.FC = () => {
 
   const router = useRouter();
 
-  const handleSearch = () => {
+  /**
+   * What: 検索実行のコア機能。
+   * Why: 「新規検索」（ユーザー入力から）と「履歴復元」（バッジクリックから）の間で一貫性を保つため、検索ロジックを一元化します。
+   *      検索実行をイベントハンドラから分離することで、偽のイベントオブジェクトを必要とせずにプログラムで検索をトリガーできます。
+   *      `shouldSaveHistory` フラグは、履歴アイテムを復元して再検索した際に、重複した新しい履歴アイテムが作成される無限ループを防ぐために重要です。
+   * 
+   * @param conditions 実行する検索条件。nullの場合、現在のコンポーネント状態を使用します。
+   * @param shouldSaveHistory この検索を履歴データベースに保存するかどうか。新規検索の場合はtrue、履歴復元の場合はfalse。
+   */
+  const executeSearch = async (conditions: any, shouldSaveHistory: boolean) => {
+    if (isSearching) {
+      console.log("Search already in progress, skipping.");
+      return;
+    }
+
     setIsSearching(true);
     
-    // UX向上のため検索遅延をシミュレート
-    setTimeout(() => {
-      const q = naturalLanguageSearch.trim().toLowerCase();
-      const exclude = excludeConditions
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
+    // UIの状態も同期させる (履歴からの復元時などに重要)
+    if (conditions) {
+        setNaturalLanguageSearch(conditions.naturalLanguageSearch || "");
+        setExcludeConditions(conditions.excludeConditions || "");
+        setSelectedTechTags(conditions.selectedTechTags || []);
+        setSelectedLocationTags(conditions.selectedLocationTags || []);
+        setMinSalary(conditions.minSalary || 0);
+        setSelectedWorkStyles(conditions.selectedWorkStyles || []);
+        
+        // 外部入力からの実行の場合、入力欄のキーをリセットして再描画を促す
+        if (!shouldSaveHistory) {
+             setTechInputKey(prev => prev + 1);
+             setLocationInputKey(prev => prev + 1);
+        }
+    }
+
+    // 検索に使用するパラメータ（引数で渡されたものがあればそれを、なければ現在のStateを使用）
+    const searchParams = conditions || {
+        naturalLanguageSearch,
+        excludeConditions,
+        selectedTechTags,
+        selectedLocationTags,
+        minSalary,
+        selectedWorkStyles
+    };
+
+    try {
+      // クエリパラメータの構築
+      const params = new URLSearchParams();
+      if (searchParams.naturalLanguageSearch) params.append('q', searchParams.naturalLanguageSearch);
+      if (searchParams.excludeConditions) params.append('exclude', searchParams.excludeConditions);
       
-      const results = mockJobs.filter((job) => {
-        const hay = (
-          job.title +
-          " " +
-          job.company +
-          " " +
-          job.description +
-          " " +
-          (job.languages?.join(" ") || "") +
-          " " +
-          (job.frameworks?.join(" ") || "") +
-          " " +
-          (job.infrastructure?.join(" ") || "")
-        ).toLowerCase();
+      (searchParams.selectedLocationTags || []).forEach((loc: string) => params.append('locations', loc));
+      (searchParams.selectedTechTags || []).forEach((skill: string) => params.append('skills', skill));
+      
+      if (searchParams.minSalary > 0) params.append('min_salary', (searchParams.minSalary * 10000).toString());
+      
+      // 実際のAPIコール
+      const response = await fetch(`/api/jobs?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
 
-        // 自然言語検索
-        if (q && !hay.includes(q)) return false;
-
-        // 除外条件
-        for (const ex of exclude) {
-          if (hay.includes(ex)) return false;
-        }
-
-        // 技術スタックタグフィルター
-        if (selectedTechTags.length > 0) {
-          for (const tag of selectedTechTags) {
-            if (!hay.includes(tag.toLowerCase())) return false;
-          }
-        }
-
-        // 最低年収フィルター
-        if (minSalary > 0 && job.salaryMinInt < minSalary) return false;
-
-        // 働き方フィルター
-        if (selectedWorkStyles.length > 0) {
-          const jobWorkStyles = job.workStyles || [];
-          const hasMatch = selectedWorkStyles.some(style => jobWorkStyles.includes(style));
-          if (!hasMatch) return false;
-        }
-
-        // 複数場所フィルター
-        if (selectedLocationTags.length > 0) {
-          const jobLoc = job.location.toLowerCase();
-          const matchesAnyLocation = selectedLocationTags.some(loc => jobLoc.includes(loc.toLowerCase()));
-          if (!matchesAnyLocation) return false;
-        }
-
-        return true;
-      });
+      const data = await response.json();
+      
+      // レスポンスデータのマッピング
+      const mappedResults = data.jobs.map((job: any) => ({
+        id: job.id,
+        title: job.title,
+        company: job.company.name,
+        companyLogo: job.company.logo_url || "https://images.unsplash.com/photo-1549923746-c502d488b3ea?q=80&w=200&auto=format&fit=crop",
+        location: job.location,
+        salary: `${(job.salary_min / 10000).toLocaleString()}万円 - ${(job.salary_max / 10000).toLocaleString()}万円`,
+        salaryMinInt: job.salary_min / 10000,
+        description: "",
+        languages: job.skills || [],
+        frameworks: [],
+        infrastructure: [],
+        score: job.ai_matching_score || 0,
+        tags: job.company.tags || [],
+        sourceUrl: job.source_url,
+        workStyles: job.work_styles || [],
+        createdAt: job.created_at
+      }));
 
       // 結果のソート
-      const sortedResults = [...results].sort((a, b) => {
-        if (sortBy === "score_desc") return b.score - a.score;
-        if (sortBy === "salary_desc") return b.salaryMinInt - a.salaryMinInt;
-        return 0; // デフォルト
+      const sortedResults = [...mappedResults].sort((a: any, b: any) => {
+          if (sortBy === "score_desc") return (b.score || 0) - (a.score || 0);
+          if (sortBy === "salary_desc") return b.salaryMinInt - a.salaryMinInt;
+          return 0;
       });
-      
+
       setSearchResults(sortedResults);
       setHasSearched(true);
-      setIsSearching(false);
-      setCurrentPage(1); // 検索時に1ページ目にリセット
 
-      // 履歴保存 (非同期)
-      saveSearchHistory(q, selectedTechTags, selectedLocationTags, minSalary, selectedWorkStyles);
-    }, 800);
+      // 検索履歴を保存
+      if (shouldSaveHistory) {
+        console.log("Calling saveSearchHistory from executeSearch.");
+        saveSearchHistory(
+            searchParams.naturalLanguageSearch,
+            searchParams.excludeConditions,
+            searchParams.selectedTechTags,
+            searchParams.selectedLocationTags,
+            searchParams.minSalary,
+            searchParams.selectedWorkStyles
+        ).catch(err => console.error("Background history save failed:", err));
+      }
+
+    } catch (error) {
+      console.error("Search error:", error);
+    } finally {
+      setIsSearching(false);
+      setCurrentPage(1);
+    }
   };
 
+  /**
+   * What: 検索ボタン/フォーム送信のイベントハンドラ。
+   * Why: ユーザーが検索を開始するための主要なエントリポイントとして機能します。
+   *      ユーザー主導の検索は常に記録されるべきであるため、常に `shouldSaveHistory: true` を強制します。
+   */
+  const handleSearch = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    // 現在のUIの状態を使って検索を実行し、履歴も保存する
+    await executeSearch({
+        naturalLanguageSearch,
+        excludeConditions,
+        selectedTechTags,
+        selectedLocationTags,
+        minSalary,
+        selectedWorkStyles
+    }, true);
+  };
+
+  // 最後に保存した条件を保持するRef（同期的な重複チェック用）
+  const lastSavedConditionsRef = useRef<any>(null);
+
+  /**
+   * What: 検索条件をデータベースに保存します。
+   * Why: 将来の使用のためにユーザーのコンテキストを保存します。
+   *      堅牢な重複排除ロジックを含みます：
+   *      1. 同期的なRefチェック (`lastSavedConditionsRef`): Reactの再レンダリングやダブルクリックによる連打保存を防ぎます。
+   *      2. 非同期的なStateチェック (`searchHistory[0]`): 最新の履歴アイテムと完全に同一の検索を保存することを防ぎます。
+   * 
+   *      また、意味的に同一の検索が正しく重複として識別されるように、
+   *      ペイロードの要約（テキストの切り捨て）とデータの正規化（配列のソート）も処理します。
+   */
   const saveSearchHistory = async (
     q: string, 
+    exclude: string,
     techTags: string[], 
     locationTags: string[], 
     minSalary: number, 
     workStyles: string[]
   ) => {
+    if (isSavingHistory.current) {
+        console.log("saveSearchHistory: Already saving, skipping duplicate call.");
+        return;
+    }
+
+    isSavingHistory.current = true;
+    console.log("saveSearchHistory START:", { q, exclude, techTags, locationTags, minSalary, workStyles });
+
     try {
-      // サマリー生成
-      const parts = [];
-      if (locationTags.length > 0) parts.push(locationTags.join(", "));
-      if (minSalary > 0) parts.push(`${minSalary}万円以上`);
-      if (techTags.length > 0) parts.push(techTags.join(", "));
-      if (workStyles.length > 0) parts.push(workStyles.join(", "));
-      if (q) parts.push(q);
-      
-      const summary = parts.length > 0 ? parts.join(", ").slice(0, 50) + (parts.join(", ").length > 50 ? "..." : "") : "条件なし";
+      // 配列のコピーを作成してからソート（元の配列を破壊しないため）
+      const sortedTechTags = [...(techTags || [])].sort();
+      const sortedLocationTags = [...(locationTags || [])].sort();
+      const sortedWorkStyles = [...(workStyles || [])].sort();
 
       const conditions = {
         naturalLanguageSearch: q,
+        excludeConditions: exclude,
         selectedTechTags: techTags,
         selectedLocationTags: locationTags,
         minSalary,
         selectedWorkStyles: workStyles
       };
 
+      // 1. Refを使った同期的な重複チェック
+      if (lastSavedConditionsRef.current) {
+        const last = lastSavedConditionsRef.current;
+        const isSameRef = 
+          (last.naturalLanguageSearch || "") === (conditions.naturalLanguageSearch || "") &&
+          (last.excludeConditions || "") === (conditions.excludeConditions || "") &&
+          last.minSalary === conditions.minSalary &&
+          JSON.stringify([...(last.selectedTechTags || [])].sort()) === JSON.stringify(sortedTechTags) &&
+          JSON.stringify([...(last.selectedLocationTags || [])].sort()) === JSON.stringify(sortedLocationTags) &&
+          JSON.stringify([...(last.selectedWorkStyles || [])].sort()) === JSON.stringify(sortedWorkStyles);
+          
+        if (isSameRef) {
+          console.log("saveSearchHistory: Duplicate search (Ref check), skipping history save");
+          return;
+        }
+      }
+
+      // 2. 既存の履歴との重複チェック
+      if (searchHistory.length > 0) {
+        const latest = searchHistory[0].conditions;
+        if (latest) {
+             const isSameState = 
+               (latest.naturalLanguageSearch || "") === (conditions.naturalLanguageSearch || "") &&
+               (latest.excludeConditions || "") === (conditions.excludeConditions || "") &&
+               (latest.minSalary || 0) === (conditions.minSalary || 0) &&
+               JSON.stringify([...(latest.selectedTechTags || [])].sort()) === JSON.stringify(sortedTechTags) &&
+               JSON.stringify([...(latest.selectedLocationTags || [])].sort()) === JSON.stringify(sortedLocationTags) &&
+               JSON.stringify([...(latest.selectedWorkStyles || [])].sort()) === JSON.stringify(sortedWorkStyles);
+               
+             if (isSameState) {
+               console.log("saveSearchHistory: Duplicate search (State check), skipping history save");
+               lastSavedConditionsRef.current = conditions;
+               return;
+             }
+        }
+      }
+
+      lastSavedConditionsRef.current = conditions;
+
+      // サマリー生成
+      const parts = [];
+      if (locationTags.length > 0) parts.push(locationTags.join(", "));
+      if (minSalary > 0) parts.push(`${minSalary}万円以上`);
+      if (techTags.length > 0) parts.push(techTags.join(", "));
+      if (workStyles.length > 0) parts.push(workStyles.join(", "));
+      
+      if (exclude) {
+        const truncExclude = exclude.length > 10 ? exclude.slice(0, 10) + "..." : exclude;
+        parts.push(`除外: ${truncExclude}`);
+      }
+      
+      if (q) {
+        const truncQ = q.length > 15 ? q.slice(0, 15) + "..." : q;
+        parts.push(truncQ);
+      }
+      
+      const summary = parts.length > 0 ? parts.join(", ").slice(0, 60) + (parts.join(", ").length > 60 ? "..." : "") : "条件なし";
+
+      console.log("saveSearchHistory: Sending API request...", summary);
       const res = await fetch('/api/history', {
         method: 'POST',
         headers: {
@@ -205,35 +365,55 @@ const SearchScreen: React.FC = () => {
       });
       
       if (res.ok) {
-        // 保存成功したらリロードして最新化
+        console.log("saveSearchHistory: Success. Refreshing list...");
         const historyRes = await fetch('/api/history');
         if (historyRes.ok) {
           const data = await historyRes.json();
           setSearchHistory(data);
         }
+      } else {
+          console.error("saveSearchHistory: API Error", res.status);
       }
     } catch (e) {
-      console.error("Failed to save history", e);
+      console.error("saveSearchHistory: Exception", e);
+    } finally {
+        isSavingHistory.current = false;
+        console.log("saveSearchHistory: END");
     }
   };
 
-  const handleHistorySelect = (item: SearchHistoryItem) => {
-    // 条件をセット
-    const c = item.conditions;
-    setNaturalLanguageSearch(c.naturalLanguageSearch || "");
-    setSelectedTechTags(c.selectedTechTags || []);
-    setSelectedLocationTags(c.selectedLocationTags || []);
-    setMinSalary(c.minSalary || 0);
-    setSelectedWorkStyles(c.selectedWorkStyles || []);
-    
-    // UI反映のためにキー更新
-    setTechInputKey(prev => prev + 1);
-    setLocationInputKey(prev => prev + 1);
+  /**
+   * What: 履歴アイテムから検索条件を復元します。
+   * Why: ユーザーが過去の検索を再現できるようにします。
+   *      重要な点として、`shouldSaveHistory: false` で `executeSearch` を呼び出します。
+   *      これにより、履歴アイテムをクリックしただけで、リストの先頭に同一の新しい履歴アイテムが作成される「履歴ループ」のバグを防ぎます。
+   *      また、実行された検索を反映するようにUIの状態（タグ、入力欄）を再構築します。
+   */
+  const handleHistorySelect = (history: SearchHistoryItem) => {
+    // 履歴データから検索条件オブジェクトを再構築
+    if (history.conditions) {
+      let restoredMinSalary = 0;
+      const salary = history.conditions.minSalary || history.conditions.min_salary;
+      const salaryNum = typeof salary === 'number' ? salary : parseInt(salary || '0', 10);
+      restoredMinSalary = salaryNum > 10000 ? salaryNum / 10000 : salaryNum;
 
-    // 即座に検索実行（state更新を待つためにsetTimeout）
-    setTimeout(() => {
-       document.getElementById("search-main-button")?.click();
-    }, 100);
+      const restoredConditions = {
+        naturalLanguageSearch: history.conditions.naturalLanguageSearch || history.conditions.keywords?.join(", ") || "",
+        excludeConditions: history.conditions.excludeConditions || "",
+        selectedTechTags: history.conditions.selectedTechTags || history.conditions.skills || [],
+        selectedLocationTags: history.conditions.selectedLocationTags || history.conditions.locations || [],
+        minSalary: restoredMinSalary,
+        selectedWorkStyles: history.conditions.selectedWorkStyles || history.conditions.employment_type || []
+      };
+
+      // 詳細フィルターを開く
+      if (!isFiltersOpen) {
+        setIsFiltersOpen(true);
+      }
+      
+      // 検索実行（履歴保存なし）
+      executeSearch(restoredConditions, false);
+    }
   };
 
   // ソートオプション変更時に再ソート（現在は全結果があるためクライアントサイドのみ）
@@ -424,6 +604,8 @@ const SearchScreen: React.FC = () => {
     }
   };
 
+
+
   return (
     <div className="w-full space-y-12">
       {/* 検索フォームカード */}
@@ -447,7 +629,7 @@ const SearchScreen: React.FC = () => {
               <div className="grid gap-3">
                 <Label htmlFor="search" className="flex items-center gap-2 text-lg font-bold leading-relaxed tracking-wide text-foreground/90">
                   <Sparkles className="w-5 h-5 text-primary" />
-                  AI検索条件
+                  自然文検索条件
                 </Label>
                 <Textarea
                   id="search"
@@ -719,13 +901,13 @@ const SearchScreen: React.FC = () => {
               </Button>
             </div>
             
-            {/* 検索履歴リスト */}
-            {searchHistory.length > 0 && (
-              <div className="pt-6">
-                <Label className="text-sm font-bold text-muted-foreground mb-3 block">
-                  <RotateCcw className="w-3 h-3 inline mr-1" />
-                  最近の検索
-                </Label>
+            {/* 検索履歴リスト (常に表示) */}
+            <div className="pt-6">
+              <Label className="text-sm font-bold text-muted-foreground mb-3 block">
+                <RotateCcw className="w-3 h-3 inline mr-1" />
+                最近の検索
+              </Label>
+              {searchHistory.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {searchHistory.map((item) => (
                     <Badge
@@ -738,8 +920,12 @@ const SearchScreen: React.FC = () => {
                     </Badge>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-muted-foreground/60 italic">
+                  検索履歴はありません。検索するとここに表示されます。
+                </p>
+              )}
+            </div>
             
           </CardContent>
         </Card>

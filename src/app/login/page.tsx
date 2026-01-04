@@ -10,16 +10,44 @@ import { User, Lock, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const LoginScreen: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = () => {
-    if (username === 'user' && password === 'password') {
-      alert('ログイン成功！');
-      router.push('/search');
-    } else {
-      alert('ユーザー名またはパスワードが間違っています。');
+  /**
+   * What: Supabaseを介してユーザー認証を処理します。
+   * Why: 認証フローのクライアントサイドのエントリーポイントです。
+   *      SSRサポート（HttpOnly Cookie）のためにCookie設定を適切に管理するため、
+   *      直接クライアントサイドのSupabase呼び出しを行うのではなく、バックエンドルート（`/api/auth/login`）を使用します。
+   */
+  const handleLogin = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // セッション更新を待つため少し待機
+        setTimeout(() => {
+           router.push('/search');
+           router.refresh(); 
+        }, 500);
+      } else {
+        const errorData = await res.json();
+        alert(`ログイン失敗: ${errorData.error || '不明なエラー'}`);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('ログイン中にエラーが発生しました。');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -88,23 +116,23 @@ const LoginScreen: React.FC = () => {
           </CardHeader>
 
           <CardContent className="space-y-8 px-8 pb-10">
-            {/* ユーザー名フィールド */}
+            {/* メールアドレスフィールド */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
               className="grid gap-3"
             >
-              <Label htmlFor="username" className="flex items-center gap-2 text-base font-medium">
+              <Label htmlFor="email" className="flex items-center gap-2 text-base font-medium">
                 <User className="w-4 h-4 text-primary" />
-                ユーザー名
+                メールアドレス
               </Label>
               <Input
-                id="username"
-                type="text"
-                placeholder="ユーザー名を入力"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="test@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 onKeyPress={handleKeyPress}
                 className="h-12 bg-background/50 border-2 border-input focus:border-primary px-4 text-base transition-all rounded-xl"
               />
@@ -143,9 +171,10 @@ const LoginScreen: React.FC = () => {
                 onClick={handleLogin}
                 variant="gradient"
                 size="lg"
+                disabled={isLoading}
                 className="w-full h-14 text-lg font-bold shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all rounded-xl"
               >
-                ログイン
+                {isLoading ? "ログイン中..." : "ログイン"}
               </Button>
             </motion.div>
 
