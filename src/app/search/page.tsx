@@ -11,6 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Eye, Building2, MapPin, DollarSign, Star, Sparkles, Ban, Heart, Code, Globe, ChevronDown, X, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { mockJobs, setSelectedJobForDetail, toggleFavorite, isFavorite, TECH_STACK_SUGGESTIONS, LOCATION_SUGGESTIONS } from "@/utils/mockData";
+import { createClient } from "@/lib/supabase/client";
+
+interface SearchHistoryItem {
+  id: string;
+  summary: string;
+  conditions: any;
+  created_at: string;
+}
 
 const SearchScreen: React.FC = () => {
   const [naturalLanguageSearch, setNaturalLanguageSearch] = useState("");
@@ -43,6 +51,29 @@ const SearchScreen: React.FC = () => {
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [activeLocationIndex, setActiveLocationIndex] = useState(0);
+
+  // 検索履歴の状態
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
+  
+  // マウント時に履歴を取得
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const res = await fetch('/api/history');
+          if (res.ok) {
+            const data = await res.json();
+            setSearchHistory(data);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch history:", error);
+      }
+    };
+    fetchHistory();
+  }, []);
   
   // 再マウント後に入力にフォーカスを当てる
   useEffect(() => {
@@ -133,7 +164,76 @@ const SearchScreen: React.FC = () => {
       setHasSearched(true);
       setIsSearching(false);
       setCurrentPage(1); // 検索時に1ページ目にリセット
+
+      // 履歴保存 (非同期)
+      saveSearchHistory(q, selectedTechTags, selectedLocationTags, minSalary, selectedWorkStyles);
     }, 800);
+  };
+
+  const saveSearchHistory = async (
+    q: string, 
+    techTags: string[], 
+    locationTags: string[], 
+    minSalary: number, 
+    workStyles: string[]
+  ) => {
+    try {
+      // サマリー生成
+      const parts = [];
+      if (locationTags.length > 0) parts.push(locationTags.join(", "));
+      if (minSalary > 0) parts.push(`${minSalary}万円以上`);
+      if (techTags.length > 0) parts.push(techTags.join(", "));
+      if (workStyles.length > 0) parts.push(workStyles.join(", "));
+      if (q) parts.push(q);
+      
+      const summary = parts.length > 0 ? parts.join(", ").slice(0, 50) + (parts.join(", ").length > 50 ? "..." : "") : "条件なし";
+
+      const conditions = {
+        naturalLanguageSearch: q,
+        selectedTechTags: techTags,
+        selectedLocationTags: locationTags,
+        minSalary,
+        selectedWorkStyles: workStyles
+      };
+
+      const res = await fetch('/api/history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ summary, conditions }),
+      });
+      
+      if (res.ok) {
+        // 保存成功したらリロードして最新化
+        const historyRes = await fetch('/api/history');
+        if (historyRes.ok) {
+          const data = await historyRes.json();
+          setSearchHistory(data);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to save history", e);
+    }
+  };
+
+  const handleHistorySelect = (item: SearchHistoryItem) => {
+    // 条件をセット
+    const c = item.conditions;
+    setNaturalLanguageSearch(c.naturalLanguageSearch || "");
+    setSelectedTechTags(c.selectedTechTags || []);
+    setSelectedLocationTags(c.selectedLocationTags || []);
+    setMinSalary(c.minSalary || 0);
+    setSelectedWorkStyles(c.selectedWorkStyles || []);
+    
+    // UI反映のためにキー更新
+    setTechInputKey(prev => prev + 1);
+    setLocationInputKey(prev => prev + 1);
+
+    // 即座に検索実行（state更新を待つためにsetTimeout）
+    setTimeout(() => {
+       document.getElementById("search-main-button")?.click();
+    }, 100);
   };
 
   // ソートオプション変更時に再ソート（現在は全結果があるためクライアントサイドのみ）
@@ -597,6 +697,7 @@ const SearchScreen: React.FC = () => {
                 size="lg"
                 disabled={isSearching}
                 className="w-full md:w-auto md:min-w-[240px] h-14 text-lg font-bold shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all rounded-xl mt-4 md:mt-0"
+                id="search-main-button"
               >
                 {isSearching ? (
                   <>
@@ -617,6 +718,29 @@ const SearchScreen: React.FC = () => {
                 )}
               </Button>
             </div>
+            
+            {/* 検索履歴リスト */}
+            {searchHistory.length > 0 && (
+              <div className="pt-6">
+                <Label className="text-sm font-bold text-muted-foreground mb-3 block">
+                  <RotateCcw className="w-3 h-3 inline mr-1" />
+                  最近の検索
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {searchHistory.map((item) => (
+                    <Badge
+                      key={item.id}
+                      variant="outline"
+                      className="cursor-pointer hover:bg-muted px-3 py-1.5 text-sm font-normal text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => handleHistorySelect(item)}
+                    >
+                      {item.summary}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            
           </CardContent>
         </Card>
       </motion.div>

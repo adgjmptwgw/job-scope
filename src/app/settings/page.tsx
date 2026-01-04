@@ -17,6 +17,17 @@ import {
   Save
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function AccountSettings() {
   const [displayName, setDisplayName] = useState("テストユーザー");
@@ -45,9 +56,8 @@ export default function AccountSettings() {
   };
 
   const handleDeleteAccount = () => {
-    if (confirm("本当にアカウントを削除しますか？この操作は取り消せません。")) {
-      alert("アカウント削除処理を実行しました（デモ）");
-    }
+    // 実際の削除処理（APIコール等）
+    alert("アカウント削除処理を実行しました（デモ）");
   };
 
   return (
@@ -196,20 +206,37 @@ export default function AccountSettings() {
           <CardHeader>
             <CardTitle className="text-xl text-red-600 flex items-center gap-2">
               <Trash2 className="w-5 h-5" />
-              危険な操作
+              アカウントの削除
             </CardTitle>
           </CardHeader>
           <CardContent className="flex items-center justify-between">
             <div className="space-y-1">
-              <p className="font-medium">アカウントの削除</p>
               <p className="text-sm text-muted-foreground">
                 アカウントと全てのデータを完全に削除します。この操作は元に戻せません。
               </p>
             </div>
-            <Button variant="destructive" onClick={handleDeleteAccount}>
-              <LogOut className="w-4 h-4 mr-2" />
-              アカウント削除
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  アカウント削除
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>本当にアカウントを削除しますか？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    アカウントと全てのデータが完全に削除されます。この操作は元に戻すことができません。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteAccount} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    削除する
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       </div>

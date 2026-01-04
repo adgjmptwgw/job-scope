@@ -7,6 +7,8 @@ services:
       dockerfile: Dockerfile
       target: deps
     container_name: job-scope-front
+    env_file:
+      - .env.local
     volumes:
       - .:/app
       - /app/node_modules

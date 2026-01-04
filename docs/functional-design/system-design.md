@@ -1,4 +1,4 @@
-# AI 求人検索プラットフォーム 基本設計書
+# AI 求人検索プラットフォーム システム設計書
 
 ## 1. システム概要
 
@@ -104,23 +104,24 @@ Next.js Route Handlers (`app/api/...`) を利用する。
 - **データベース**: Supabase (PostgreSQL)
 - **認証**: Supabase Auth
 - **インフラ**: Vercel (Frontend/API), Supabase (DB/Auth)
-- **AI**: OpenAI API (予定)
+- **AI**: Google Gemini API (無料枠)
 
 
 ## 3. 機能設計
 
 ### 3.1 機能一覧
 
-| No  | 機能名       | 概要                                                         | 優先度 |
-| --- | ------------ | ------------------------------------------------------------ | ------ |
-| 1   | AI 意味検索  | 自然文での検索条件を AI が解析し、関連求人を検索・表示する。 | 高     |
-| 2   | 横断求人検索 | 複数の外部ソースから求人情報を統合し検索する。               | 高     |
-| 3   | 企業実態評価 | 公開情報に基づき、AI が企業の評判や実態を要約する。          | 高     |
-| 4   | 評価理由表示 | AI の評価理由や根拠となる情報源を表示する。                  | 高     |
-| 5   | 除外条件指定 | ユーザーが指定した NG 条件を検索に反映する。                 | 中     |
-| 6   | お気に入り機能 | 保存した求人を確認できる。 | 中     |
-| 7   | アカウント設定 | パスワード、メール、プロフィール等の管理。                   | 高     |
-| 8   | ユーザー認証 | ID/パスワードによる基本的な認証機能。                        | 高     |
+| No  | 機能名       | 概要                                                         |
+| --- | ------------ | ------------------------------------------------------------ |
+| 1   | AI 意味検索  | 自然文での検索条件を AI が解析し、関連求人を検索・表示する。 |
+| 2   | 横断求人検索 | 複数の外部ソースから求人情報を統合し検索する。               |
+| 3   | 企業実態評価 | 公開情報に基づき、AI が企業の評判や実態を要約する。          |
+| 4   | 評価理由表示 | AI の評価理由や根拠となる情報源を表示する。                  |
+| 5   | 除外条件指定 | ユーザーが指定した NG 条件を検索に反映する。                 |
+| 6   | お気に入り機能 | 保存した求人を確認できる。 |
+| 7   | 検索履歴 | 過去の検索条件を最大15件まで保存し、再利用できる。 |
+| 8   | アカウント設定 | パスワード、メール、プロフィール等の管理。                   |
+| 9   | ユーザー認証 | ID/パスワードによる基本的な認証機能。                        |
 
 #### 3.1.1 企業実態評価の具体例
 
@@ -154,67 +155,7 @@ AI検索条件の内容に基づいて、AIが項目を分割して根拠リン�
 
 - [**詳細設計書 (API)**](./detail-design.md)
 
-## 4. データ設計
 
-### 4.1 論理データモデル
-
-#### エンティティと属性（主要なもの）
-
-1.  **User (ユーザー)**
-
-    - `id`: UUID (Primary Key)
-    - `username`: String (Unique)
-    - `email`: String (Unique)
-    - `displayName`: String
-    - `avatarUrl`: String
-    - `passwordHash`: String
-    - `createdAt`: DateTime
-    - `updatedAt`: DateTime
-
-2.  **Job (求人情報)**
-
-    - `id`: UUID (Primary Key)
-    - `title`: String
-    - `companyId`: UUID (Foreign Key to Company)
-    - `location`: String
-    - `salary`: String
-    - `description`: String
-    - `requirements`: String
-    - `languages`: String[]
-    - `frameworks`: String[]
-    - `infrastructure`: String[]
-    - `salaryMinInt`: Int (最低年収、最大1400万まで指定可能)
-    - `location`: String (勤務地、複数指定のタグ検索に対応)
-    - `workStyles`: String[] (Remote, Flexなど)
-    - `evaluationItems`: Object[] (カテゴリ別の評価項目)
-        - `category`: String (例: `残業時間`, `有給の取りやすさ`)
-        - `links`: String[] (根拠となる参照 URL)
-    - `createdAt`: DateTime
-    - `updatedAt`: DateTime
-
-3.  **Company (企業情報)**
-    ... (中略) ...
-
-5.  **AIEvaluation (AI 評価結果)**
-    - `id`: UUID (Primary Key)
-    - `jobId`: UUID (Foreign Key to Job)
-    - `companyId`: UUID (Foreign Key to Company)
-    - `summary`: String (AI による要約)
-    - `score`: Float (AI による評価スコア)
-    - `reason`: String (AI による評価理由)
-    - `createdAt`: DateTime
-
-#### 4.1.1 関連性
-
-- `Job` は `Company` に属する (多対 1)。
-- `AIEvaluation` は `Job` と `Company` に関連付けられる。
-- `AIEvaluation` は `ExternalInfo` を参照し、評価の根拠とする。
-
-### 4.2 物理データモデル
-
-- PostgreSQL を利用し、Prisma ORM のスキーマ定義に従う。
-- 各エンティティはテーブルとして実装される。
-- リレーションは外部キー制約として設定する。
 
 ## 5. 非機能要件 (最小限)
 
@@ -255,8 +196,6 @@ AI検索条件の内容に基づいて、AIが項目を分割して根拠リン�
 - **ログ/監視**: Vercel Analytics, Vercel Logs
 
 
-
-
 ### 6.2 開発環境
 
 - **ランタイム**: Node.js (v18以上推奨)
@@ -266,15 +205,44 @@ AI検索条件の内容に基づいて、AIが項目を分割して根拠リン�
 - **ツール**: VS Code, Git
 
 
-
-
 - **Supabase**:
   - Auth: ユーザー認証・管理
   - Database: 構造化データの永続化
 - **外部求人サイト**:
   - 必要に応じて API 連携またはスクレイピングを実施（Next.js API Routes または Vercel Cron Jobs）
 
+### 6.3 データライフサイクル管理
 
+求人情報の鮮度と信頼性を維持するためのポリシーを定める。
+
+- **鮮度ポリシー (Freshness Policy)**:
+  - 最終更新日 (crawled_at) から **30日以内** の求人のみを検索対象とする。
+  - 期限切れの求人は検索結果から自動的に除外する（アーカイブ扱い）。
+
+- **データ更新 (Updates)**:
+  - 定期的な再クローリングにより情報を更新する（MVPフェーズでは手動または簡易バッチ）。
+  - URLが無効になっている、または募集終了のフラグが検知された場合は `is_active = false` に更新する。
+
+- **ユーザーフィードバック**:
+  - ユーザーが「募集終了」や「リンク切れ」を報告できる機能を設ける。
+  - 一定数の報告があった求人は自動的に非表示にする。
+
+- **重複排除**:
+  - 同一URL、または「企業名 + タイトル」が一致する求人は重複として扱い、最新のものを優先表示する。
+
+### 6.4 ベンダー非依存性と変更容易性 (Vendor Independence)
+
+本プロジェクトは、DB、認証基盤、AIプロバイダーの将来的な変更を見据え、特定のベンダー・技術にロックインされない設計を徹底する。
+
+- **Layered Architectureによる抽象化**:
+  - `Domain Layer` および `Application Layer` は外部ツール（Supabase, Gemini等）に依存しない純粋なTypeScriptで記述する。
+  - 具体的なAPI呼び出しは `Infrastructure Layer` に封じ込め、インターフェース(`Repository Interface`, `Service Interface`) を介して利用する。
+- **Repository Patternの徹底**:
+  - データアクセスは必ず Repository を経由させ、「Supabaseを直接呼び出すコード」がビジネスロジックに散乱することを防ぐ。
+  - これにより、将来的に MySQL や PlanetScale 等へ移行する場合も、Repositoryの実装クラスを差し替えるのみで対応可能とする。
+- **AI Service Adapter**:
+  - AI機能についても `AIService` インターフェースを定義し、`GeminiAdapter` `OpenAIAdapter` のように実装を分離する。
+  - プロンプトやモデル固有のパラメータもAdapter内で管理し、メインロジックへの影響を最小化する。
 
 
 - **技術選定の制約**:
@@ -285,6 +253,7 @@ AI検索条件の内容に基づいて、AIが項目を分割して根拠リン�
   - Vercel, Supabase の無料枠（または低コストプラン）で運用可能な構成とする。
   - 高額な外部サービスへの依存は避ける。
 - **データとAI**:
+  - AI検索は Google Gemini API (無料枠) で実施する。他のAIツールは使用しない。
   - AI の評価結果は参考情報であり最終判断はユーザーが行うものとする。
   - 扱う情報はすべて公開情報に限定する。会員登録・ログインが必要なサイトは要約対象外。
   - AI による評価は断定ではなく傾向・意見の要約として表現する。

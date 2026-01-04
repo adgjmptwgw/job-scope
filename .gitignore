@@ -39,3 +39,5 @@ next-env.d.ts
 
 # Supabase
 supabase/functions/*/deno.lock
+secrets
+secrets.md
