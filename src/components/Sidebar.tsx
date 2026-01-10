@@ -7,9 +7,21 @@ import {
   Briefcase, 
   Search, 
   Heart,
-  LogOut
+  LogOut,
+  Settings
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const Sidebar: React.FC = () => {
   const pathname = usePathname();
@@ -21,11 +33,20 @@ const Sidebar: React.FC = () => {
     { path: '/favorites', label: 'お気に入り', icon: Heart },
   ];
 
-  const handleLogout = () => {
-    // モックログアウトロジック
-    if (confirm("ログアウトしますか？")) {
-       // 機能的にはここでSupabaseセッションをクリア
-       router.push('/login');
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      if (res.ok) {
+        router.push('/login');
+        router.refresh();
+      } else {
+        console.error('Logout failed');
+        // フォールバック
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      router.push('/login');
     }
   };
 
@@ -83,14 +104,37 @@ const Sidebar: React.FC = () => {
           </Link>
         </Button>
 
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start h-10 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-5 h-5 mr-3" />
-          ログアウト
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start h-10 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+            >
+              <LogOut className="w-5 h-5 mr-3" />
+              ログアウト
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="bg-background/95 backdrop-blur-xl border-border/50 shadow-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
+                <LogOut className="w-5 h-5 text-red-500" />
+                ログアウトしますか？
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-muted-foreground">
+                ログアウトすると、現在のセッションが終了します。もう一度利用するには再ログインが必要です。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel className="border-border/50 hover:bg-accent">キャンセル</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleLogout}
+                className="bg-red-500 hover:bg-red-600 text-white border-0"
+              >
+                ログアウト
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </motion.aside>
   );

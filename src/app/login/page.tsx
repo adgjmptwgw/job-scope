@@ -13,6 +13,7 @@ const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   /**
@@ -23,6 +24,7 @@ const LoginScreen: React.FC = () => {
    */
   const handleLogin = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -41,11 +43,11 @@ const LoginScreen: React.FC = () => {
         }, 500);
       } else {
         const errorData = await res.json();
-        alert(`ログイン失敗: ${errorData.error || '不明なエラー'}`);
+        setError(`ログイン失敗: ${errorData.error || '不明なエラー'}`);
       }
     } catch (error) {
       console.error('Login error:', error);
-      alert('ログイン中にエラーが発生しました。');
+      setError('ログイン中にエラーが発生しました。');
     } finally {
       setIsLoading(false);
     }
@@ -113,6 +115,16 @@ const LoginScreen: React.FC = () => {
                 JobScopeへようこそ
               </p>
             </div>
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-2 rounded-lg text-sm font-medium text-center"
+              >
+                {error}
+              </motion.div>
+            )}
           </CardHeader>
 
           <CardContent className="space-y-8 px-8 pb-10">
@@ -178,15 +190,28 @@ const LoginScreen: React.FC = () => {
               </Button>
             </motion.div>
 
-            {/* ヘルパーテキスト */}
-            <motion.p
+            {/* デモ用ボタン */}
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.6 }}
-              className="text-center text-sm text-muted-foreground pt-2"
+              className="flex justify-center pt-2"
             >
-              デモ用: user / password
-            </motion.p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEmail('test@example.com');
+                  setPassword('password123');
+                }}
+                className="group relative overflow-hidden border-dashed border-primary/30 hover:border-primary/60 bg-primary/5 hover:bg-primary/10 text-xs text-muted-foreground transition-all rounded-lg px-4"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary/50 group-hover:bg-primary animate-pulse" />
+                  <span>デモ用アカウントで入力</span>
+                </div>
+              </Button>
+            </motion.div>
           </CardContent>
         </Card>
       </motion.div>

@@ -256,94 +256,184 @@ ${query}
   }
 
   /**
-   * Google Search Grounding付きでGemini APIを呼び出す
-   * 注意: grounding toolはgemini-2.0-flash-expやVertex AIで利用可能
-   * デフォルトAPIでは動作しない場合があるため、フォールバックを実装
-   */
-  private async generateContentWithGrounding(prompt: string): Promise<Response> {
-    const model = 'models/gemini-2.0-flash';
-    
-    console.log(`[Gemini] Using model with grounding attempt: ${model}`);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      // まずGrounding付きで試す
-      const response = await fetch(
-        `${this.baseUrl}/${model}:generateContent?key=${this.apiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }],
-            tools: [{
-              google_search_retrieval: {
-                dynamic_retrieval_config: {
-                  mode: "MODE_DYNAMIC",
-                  dynamic_threshold: 0.3
-                }
-              }
-            }],
-            generationConfig: {
-              temperature: 0.3,
-              topP: 0.8,
-              maxOutputTokens: 4096,
-            },
-          }),
-          signal: controller.signal,
-        }
-      );
-      
-      clearTimeout(timeoutId);
-      
-      // grounding toolがサポートされていない場合は通常のAPIで再試行
-      if (!response.ok && response.status === 400) {
-        console.log('⚠️ Grounding tool not available, falling back to standard API...');
-        return this.generateContentWithRetry(prompt, 0.3, 4096);
-      }
-      
-      return response;
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      
-      // タイムアウトや他のエラーの場合は通常APIにフォールバック
-      if (error.name === 'AbortError') {
-        console.log('⚠️ Grounding request timed out, falling back to standard API...');
-        return this.generateContentWithRetry(prompt, 0.3, 4096);
-      }
-      
-      throw error;
-    }
-  }
-
-  /**
-   * Stage 3: Self-Consistency による検証（モック実装）
+   * Stage 3: Self-Consistency による検証
+   * 実際の Gemini API を使用して求人候補を3つの異なるプロンプトで評価し、
+   * 多数決により一貫性を検証する。
    */
   async evaluateConsistencyBatch(candidates: any[], intent: SearchIntent): Promise<any[]> {
     console.log('\n========================================');
-    console.log('✓ [Stage 3] Self-Consistency 検証 (モック)');
+    console.log('✓ [Stage 3] Self-Consistency 検証');
     console.log('========================================');
     console.log('📊 候補数:', candidates.length);
     console.log('🎯 意図:', intent.search_intent_summary);
+
+    const validatedCandidates: any[] = [];
     
-    const validated = candidates.map((c, idx) => ({
-      ...c,
-      confidence: 100 - idx * 10,
-      match_reasons: [
-        `✅ ${c.skills?.[0] || 'スキル'}の経験を活かせるポジションです`,
-        '✅ 希望年収の条件を満たしています'
-      ]
-    }));
-    
-    console.log('✅ 検証完了');
+    for (const candidate of candidates) {
+      console.log(`\n🔍 求人評価中: ${candidate.title} @ ${candidate.company.name}`);
+      
+      // 3つの異なるプロンプトで評価（ここも直列にしてより安全に）
+      const prompts = [
+        this.buildDirectScoringPrompt(candidate, intent),
+        this.buildRequirementCheckPrompt(candidate, intent),
+        this.buildCriticalReviewPrompt(candidate, intent)
+      ];
+
+      try {
+        const results = [];
+        for (const prompt of prompts) {
+          const response = await this.generateContentWithRetry(prompt, 0.3, 1024);
+          if (!response.ok) {
+            results.push({ score: 0, isMatch: false, reason: 'API Error' });
+            continue;
+          }
+
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          
+          // JSON パース
+          const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
+          const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : '{}';
+          const parsed = JSON.parse(jsonText);
+
+          results.push({
+            score: parsed.score || 0,
+            isMatch: (parsed.score || 0) >= 70,
+            reason: parsed.reason || ''
+          });
+          
+          // プロンプト間に2秒待機してレート制限を回避
+          await this.sleep(2000);
+        }
+
+        // 多数決と平均値の算出
+        const matchCount = results.filter(r => r.isMatch).length;
+        const avgScore = Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length);
+        const isFinalMatch = matchCount >= 2;
+        
+        // 理由の統合
+        const matchReasons = results
+          .filter(r => r.reason)
+          .map(r => `✅ ${r.reason}`)
+          .slice(0, 3);
+
+        console.log(`  => 結果: ${isFinalMatch ? '一致' : '不一致'} (スコア: ${avgScore}, 一致数: ${matchCount}/3)`);
+
+        validatedCandidates.push({
+          ...candidate,
+          confidence: Math.round((matchCount / 3) * 100),
+          match_score: avgScore,
+          is_match: isFinalMatch,
+          match_reasons: matchReasons.length > 0 ? matchReasons : ['条件に合致しています']
+        });
+        
+        // 求人間に4秒待機（15RPM制限を確実に守るため）
+        await this.sleep(4000);
+
+      } catch (error: any) {
+        console.error(`  ❌ 評価エラー (${candidate.title}):`, error.message);
+        validatedCandidates.push({
+          ...candidate,
+          confidence: 0,
+          match_score: 0,
+          is_match: false,
+          match_reasons: ['評価中にエラーが発生しました']
+        });
+      }
+    }
+
+    // マッチしたものだけを返す（またはスコア順にソートして全て返すか検討が必要だが、
+    // ここではマッチしたものを優先して返す）
+    const results = validatedCandidates
+      .filter(c => c.is_match)
+      .sort((a, b) => b.match_score - a.match_score);
+
+    console.log(`\n✅ 検証完了: ${results.length}/${candidates.length} 件が適合`);
     console.log('========================================\n');
     
-    return validated;
+    return results;
+  }
+
+  /**
+   * パターン1: 直接的スコアリングプロンプト
+   */
+  private buildDirectScoringPrompt(job: any, intent: SearchIntent): string {
+    return `あなたは優秀なITリクルーターです。
+以下の求人がユーザーの検索意図にどの程度合致しているか、0-100点で評価してください。
+
+【ユーザーの検索意図】
+${intent.search_intent_summary}
+
+【求人情報】
+タイトル: ${job.title}
+企業: ${job.company.name}
+勤務地: ${job.location}
+必須スキル: ${job.skills.join(', ')}
+給与: ${job.salary_min} - ${job.salary_max}
+説明: ${job.description}
+
+【出力形式】
+JSON形式のみで出力してください。
+{
+  "score": 0-100の数値,
+  "reason": "合致（または不合致）する主な理由（1文）"
+}`;
+  }
+
+  /**
+   * パターン2: 要件チェックリストプロンプト
+   */
+  private buildRequirementCheckPrompt(job: any, intent: SearchIntent): string {
+    const mustHave = intent.implicit?.must_have || [];
+    const explicitSkills = intent.explicit?.skills || [];
+    const allRequirements = [...new Set([...mustHave, ...explicitSkills])];
+
+    return `あなたは厳格な採用審査員です。
+以下の求人がユーザーの「必須条件」をすべて満たしているか厳しくチェックしてください。
+
+【必須条件】
+- スキル/要件: ${allRequirements.join(', ')}
+- 勤務地: ${intent.explicit?.locations?.join(', ') || '指定なし'}
+- 最低年収: ${intent.explicit?.min_salary || '指定なし'}
+
+【求人情報】
+${JSON.stringify(job)}
+
+【指示】
+すべての条件を照らし合わせ、総合的な適合スコア（0-100）を算出してください。
+必須条件が大幅に欠けている場合は50点以下にしてください。
+
+【出力形式】
+JSON形式のみで出力してください。
+{
+  "score": 0-100の数値,
+  "reason": "要件への適合状況に関するコメント（1文）"
+}`;
+  }
+
+  /**
+   * パターン3: 批判的検証プロンプト
+   */
+  private buildCriticalReviewPrompt(job: any, intent: SearchIntent): string {
+    return `あなたは慎重なキャリアコンサルタントです。
+この求人をユーザーに勧める上での「リスク」や「ミスマッチ」の可能性をあえて探してください。
+
+【ユーザーの希望】
+${intent.search_intent_summary}
+
+【求人情報】
+${JSON.stringify(job)}
+
+【指示】
+ネガティブな要素（条件が曖昧、スキルが微妙にズレている、年収が希望に届かない等）がないか分析し、
+それでもなお勧める価値があるかを判断して0-100点でスコアを付けてください。
+
+【出力形式】
+JSON形式のみで出力してください。
+{
+  "score": 0-100の数値,
+  "reason": "分析結果に基づく推薦理由、または注意点（1文）"
+}`;
   }
 
   /**
@@ -548,7 +638,7 @@ ${query}
    */
   private async generateContentWithRetry(prompt: string, temperature: number, maxOutputTokens: number): Promise<Response> {
     const models = ['models/gemini-2.0-flash', 'models/gemini-flash-latest'];
-    const maxRetries = 3; // 429エラー時の最大リトライ回数
+    const maxRetries = 5; // 429エラー時の最大リトライ回数を増加
     let lastError: any = null;
 
     for (const model of models) {
@@ -557,7 +647,7 @@ ${query}
           console.log(`[Gemini] Trying model: ${model} (attempt ${attempt + 1}/${maxRetries + 1})`);
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト
+          const timeoutId = setTimeout(() => controller.abort(), 20000); // 20秒タイムアウトに延長
 
           try {
             const response = await fetch(
@@ -588,7 +678,7 @@ ${query}
 
             // 429 Rate Limit: 指数バックオフでリトライ
             if (response.status === 429) {
-              const waitTime = Math.pow(2, attempt) * 2000; // 2秒, 4秒, 8秒...
+              const waitTime = Math.pow(2, attempt) * 3000; // 3秒, 6秒, 12秒, 24秒...
               console.warn(`⏳ [Gemini] Rate limit (429). ${waitTime/1000}秒後にリトライ...`);
               await this.sleep(waitTime);
               continue; // 同じモデルでリトライ

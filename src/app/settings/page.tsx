@@ -37,6 +37,8 @@ export default function AccountSettings() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showDeleteSuccess, setShowDeleteSuccess] = useState(false);
 
   // モックアバターURL
   const [avatarUrl, setAvatarUrl] = useState("https://github.com/shadcn.png");
@@ -46,7 +48,8 @@ export default function AccountSettings() {
     // API呼び出しをシミュレート
     setTimeout(() => {
       setIsSaving(false);
-      alert("設定を保存しました（デモ）");
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
       if (newEmail) setEmail(newEmail);
       setNewEmail("");
       setCurrentPassword("");
@@ -56,8 +59,10 @@ export default function AccountSettings() {
   };
 
   const handleDeleteAccount = () => {
-    // 実際の削除処理（APIコール等）
-    alert("アカウント削除処理を実行しました（デモ）");
+    setShowDeleteSuccess(true);
+    setTimeout(() => {
+       window.location.href = '/login';
+    }, 2000);
   };
 
   return (
@@ -68,6 +73,29 @@ export default function AccountSettings() {
           プロフィール、連絡先情報、セキュリティ設定を管理します。
         </p>
       </div>
+
+      {showSuccess && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-primary/10 border border-primary/20 text-primary px-4 py-3 rounded-lg flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Save className="w-4 h-4" />
+            設定を保存しました（デモ）
+          </div>
+        </motion.div>
+      )}
+
+      {showDeleteSuccess && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 rounded-lg flex items-center justify-center font-bold"
+        >
+          アカウントを削除しました。ログイン画面に戻ります...
+        </motion.div>
+      )}
 
       <div className="grid gap-8">
         {/* プロフィールセクション */}
