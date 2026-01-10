@@ -1,9 +1,15 @@
 import { 
   IGeminiClient, 
   SearchConditions, 
-  CompanyEvaluation
+  CompanyEvaluation,
+  TechEvaluation
 } from './IGeminiClient';
+import { SearchIntent } from '../../domain/types/SearchIntent';
 
+/**
+ * Gemini API クライアント
+ * Stage 1 は実際のAPIを使用、Stage 2-4 はモック実装
+ */
 export class GeminiClient implements IGeminiClient {
   private apiKey: string;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
@@ -12,6 +18,9 @@ export class GeminiClient implements IGeminiClient {
     this.apiKey = apiKey;
   }
 
+  /**
+   * 既存の検索クエリパース（旧実装）
+   */
   async parseSearchQuery(query: string): Promise<SearchConditions> {
     const prompt = this.buildSearchQueryPrompt(query);
     console.log('[Gemini] parseSearchQuery called with:', query);
@@ -34,7 +43,6 @@ export class GeminiClient implements IGeminiClient {
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       
-      // JSON部分を抽出 (```json ... ``` の形式に対応)
       const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
       const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : '{}';
       
@@ -45,11 +53,217 @@ export class GeminiClient implements IGeminiClient {
       } else {
         console.error('Failed to parse search query:', error);
       }
-      // フォールバック: 空の検索条件を返す
       return {};
     }
   }
 
+  /**
+   * Stage 1: Chain-of-Thought を使った意図理解
+   * 実際のGemini APIを呼び出してユーザーの検索意図を解析する
+   */
+  async parseQueryWithCoT(query: string): Promise<SearchIntent> {
+    console.log('\n========================================');
+    console.log('🧠 [Stage 1] Chain-of-Thought 意図理解');
+    console.log('========================================');
+    console.log('📝 入力クエリ:', query);
+    
+    const prompt = this.buildCoTPrompt(query);
+    
+    try {
+      console.log('🔄 Gemini API を呼び出し中...');
+      const response = await this.generateContentWithRetry(prompt, 0.2, 2048);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Gemini API エラー:', errorText);
+        throw new Error(`Gemini API error: ${response.statusText} (${response.status})`);
+      }
+      
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      
+      console.log('\n📤 Gemini 生テキスト出力:');
+      console.log('---');
+      console.log(text);
+      console.log('---');
+      
+      // JSON部分を抽出
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
+      const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : '{}';
+      
+      const parsed = JSON.parse(jsonText);
+      
+      console.log('\n✅ パース結果:');
+      console.log(JSON.stringify(parsed, null, 2));
+      console.log('========================================\n');
+      
+      return {
+        explicit: parsed.explicit || {
+          locations: [],
+          skills: [],
+          min_salary: null
+        },
+        implicit: parsed.implicit || {
+          role: undefined,
+          employment_type: [],
+          min_salary: null,
+          company_size: [],
+          nice_to_have: [],
+          must_have: []
+        },
+        search_intent_summary: parsed.search_intent_summary || `「${query}」の検索結果`
+      };
+    } catch (error: any) {
+      console.error('❌ [Stage 1] エラー発生:', error.message);
+      return {
+        explicit: {
+          locations: [],
+          skills: [],
+          min_salary: null
+        },
+        implicit: {
+          role: undefined,
+          employment_type: [],
+          min_salary: null,
+          company_size: [],
+          nice_to_have: []
+        },
+        search_intent_summary: `「${query}」の検索結果`
+      };
+    }
+  }
+
+  /**
+   * Stage 2: Google Search Grounding を使った検索（モック実装）
+   */
+  async searchWithGrounding(query: string): Promise<any[]> {
+    console.log('\n========================================');
+    console.log('🔍 [Stage 2] Google Search Grounding (モック)');
+    console.log('========================================');
+    console.log('📝 検索クエリ:', query);
+    console.log('⚠️ モックデータを使用中...');
+    
+    const mockResults = [
+      {
+        id: 'job-001',
+        title: 'Senior React Engineer',
+        company: { name: 'SmartHR' },
+        location: '東京都渋谷区',
+        salary_min: 8000000,
+        salary_max: 12000000,
+        skills: ['React', 'TypeScript', 'Next.js'],
+        source_url: 'https://example.com/job/001',
+        description: 'SmartHRでのフロントエンド開発'
+      },
+      {
+        id: 'job-002',
+        title: 'Frontend Developer (React)',
+        company: { name: 'Mercari' },
+        location: '東京都 (Remote)',
+        salary_min: 9000000,
+        salary_max: 15000000,
+        skills: ['React', 'GraphQL'],
+        source_url: 'https://example.com/job/002',
+        description: 'メルカリでのWeb開発'
+      },
+      {
+        id: 'job-003',
+        title: 'Web Engineer',
+        company: { name: 'CyberAgent' },
+        location: '東京都渋谷区',
+        salary_min: 7000000,
+        salary_max: 11000000,
+        skills: ['React', 'Vue.js', 'TypeScript'],
+        source_url: 'https://example.com/job/003',
+        description: 'サイバーエージェントでのメディア開発'
+      }
+    ];
+    
+    console.log(`✅ ${mockResults.length}件の求人を取得`);
+    console.log('========================================\n');
+    
+    return mockResults;
+  }
+
+  /**
+   * Stage 3: Self-Consistency による検証（モック実装）
+   */
+  async evaluateConsistencyBatch(candidates: any[], intent: SearchIntent): Promise<any[]> {
+    console.log('\n========================================');
+    console.log('✓ [Stage 3] Self-Consistency 検証 (モック)');
+    console.log('========================================');
+    console.log('📊 候補数:', candidates.length);
+    console.log('🎯 意図:', intent.search_intent_summary);
+    
+    const validated = candidates.map((c, idx) => ({
+      ...c,
+      confidence: 100 - idx * 10,
+      match_reasons: [
+        `✅ ${c.skills?.[0] || 'スキル'}の経験を活かせるポジションです`,
+        '✅ 希望年収の条件を満たしています'
+      ]
+    }));
+    
+    console.log('✅ 検証完了');
+    console.log('========================================\n');
+    
+    return validated;
+  }
+
+  /**
+   * Stage 4: 技術力評価バッチ（モック実装）
+   */
+  async evaluateTechBatch(companyNames: string[]): Promise<TechEvaluation[]> {
+    console.log('\n========================================');
+    console.log('💻 [Stage 4a] 技術力評価 (モック)');
+    console.log('========================================');
+    console.log('🏢 対象企業:', companyNames.join(', '));
+    
+    const mockData: Record<string, TechEvaluation> = {
+      'SmartHR': {
+        companyName: 'SmartHR',
+        tech_score: 88,
+        tech_stack_modernity: 92,
+        engineering_culture: 85,
+        summary: 'Ruby on Rails + React/TypeScriptのモダンな技術スタック。OSSへの貢献も活発。',
+        strengths: ['技術ブログが充実', 'OSSへの貢献', 'モダンなCI/CD環境']
+      },
+      'Mercari': {
+        companyName: 'Mercari',
+        tech_score: 92,
+        tech_stack_modernity: 95,
+        engineering_culture: 90,
+        summary: 'マイクロサービス + Go/Kubernetesの先進的なアーキテクチャ。',
+        strengths: ['カンファレンス登壇多数', 'グローバル開発', 'SRE文化']
+      },
+      'CyberAgent': {
+        companyName: 'CyberAgent',
+        tech_score: 78,
+        tech_stack_modernity: 80,
+        engineering_culture: 75,
+        summary: '多様な技術スタックでチームにより異なる。メディア系はReact/Next.js。',
+        strengths: ['内製ツールの開発', '大規模トラフィック経験', '新規事業の機会']
+      }
+    };
+    
+    const results = companyNames.map(name => mockData[name] || {
+      companyName: name,
+      tech_score: 70,
+      tech_stack_modernity: 70,
+      engineering_culture: 70,
+      summary: '評価データなし',
+      strengths: []
+    });
+    
+    console.log('✅ 技術評価完了');
+    console.log('========================================\n');
+    
+    return results;
+  }
+
+  /**
+   * 企業評価（既存実装）
+   */
   async evaluateCompany(companyId: string, companyName: string): Promise<CompanyEvaluation> {
     const prompt = this.buildCompanyEvaluationPrompt(companyName);
     
@@ -89,6 +303,48 @@ export class GeminiClient implements IGeminiClient {
     }
   }
 
+  // ========== プライベートメソッド ==========
+
+  /**
+   * Chain-of-Thought プロンプトを構築
+   */
+  private buildCoTPrompt(query: string): string {
+    return `あなたは優秀なITキャリアアドバイザーです。
+ユーザーの求人検索クエリを深く分析し、明示的な条件と暗黙的な希望の両方を抽出してください。
+
+【ユーザー入力】
+${query}
+
+【分析タスク】
+1. まず、ユーザーが明示的に述べている条件を抽出してください
+2. 次に、文脈から推測できる暗黙の希望を推論してください
+3. 最後に、検索意図を1文で要約してください
+
+【出力形式】
+必ず以下のJSON形式で出力してください。説明文は不要です。
+
+\`\`\`json
+{
+  "explicit": {
+    "locations": ["勤務地の配列"],
+    "skills": ["スキルの配列"],
+    "min_salary": 8000000
+  },
+  "implicit": {
+    "role": "推測される職種",
+    "employment_type": ["正社員など"],
+    "min_salary": null,
+    "company_size": ["Startup", "Enterprise", "SME"],
+    "nice_to_have": ["あれば嬉しい条件"],
+    "must_have": ["必須条件"]
+  },
+  "search_intent_summary": "ユーザーの検索意図を1文で要約"
+}
+\`\`\`
+
+重要: 推測できない項目はnullまたは空配列にしてください。架空のデータを作らないでください。`;
+  }
+
   private buildSearchQueryPrompt(query: string): string {
     return `あなたは優秀なIT専門の採用担当者兼データアナリストです。
 ユーザーの曖昧な要望から、具体的な検索条件を推論・抽出することが求められます。
@@ -102,15 +358,15 @@ ${query}
 【出力スキーマ】
 \`\`\`json
 {
-  "keywords": [],  // フリーワード
-  "locations": [],  // 勤務地
-  "min_salary": null,  // 最低年収
-  "max_salary": null,  // 最高年収
-  "skills": [],  // スキル
-  "employment_type": [],  // "Full-time", "Contract", "Freelance", "Part-time"
-  "remote_available": null,  // true/false/null
-  "experience_level": [],  // "Junior", "Middle", "Senior", "Lead"
-  "company_characteristics": []  // "Startup", "Enterprise", etc.
+  "keywords": [],
+  "locations": [],
+  "min_salary": null,
+  "max_salary": null,
+  "skills": [],
+  "employment_type": [],
+  "remote_available": null,
+  "experience_level": [],
+  "company_characteristics": []
 }
 \`\`\`
 
@@ -130,10 +386,10 @@ ${query}
   "summary": "企業の総合的な評価（1〜2文）",
   "topics": [
     {
-      "category": "Culture",  // Culture, Management, WorkLifeBalance, Growth, Compensation
+      "category": "Culture",
       "title": "トピックのタイトル",
       "description": "詳細な説明",
-      "sentiment": "Positive",  // Positive, Negative, Neutral
+      "sentiment": "Positive",
       "sources": [
         { "title": "情報源のタイトル", "url": "https://example.com" }
       ]
@@ -142,7 +398,7 @@ ${query}
 }
 \`\`\`
 
-**重要な注意事項:**
+重要な注意事項:
 1. 必ず根拠となる情報源（sources）を含めること
 2. 推測や架空の情報は含めないこと
 3. 各トピックはPositive/Negative/Neutralを明確にすること
@@ -159,7 +415,7 @@ ${query}
         console.log(`[Gemini] Trying model: ${model}`);
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         try {
           const response = await fetch(
@@ -175,7 +431,7 @@ ${query}
                 }],
                 generationConfig: {
                   temperature,
-                  topP: 0.8, // Common topP
+                  topP: 0.8,
                   maxOutputTokens,
                 },
               }),
@@ -188,15 +444,12 @@ ${query}
              return response;
           }
 
-          // status check for retryable errors (429, 503, 500)
-          // 404 (Not Found) also triggers retry in case model is missing/unavailable specifically
           if ([429, 500, 503, 404].includes(response.status)) {
                console.warn(`[Gemini] Model ${model} failed with status ${response.status}. Retrying with next model...`);
                lastError = response;
                continue;
           }
           
-          // Non-retryable error (e.g. 400 Bad Request if params are wrong)
           return response;
 
         } catch (fetchError: any) {
@@ -215,7 +468,6 @@ ${query}
       }
     }
 
-    // If all failed, throw or return the last error response
     if (lastError instanceof Response) {
         return lastError;
     }

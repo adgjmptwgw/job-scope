@@ -8,10 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Eye, Building2, MapPin, DollarSign, Star, Sparkles, Ban, Heart, Code, Globe, ChevronDown, X, RotateCcw } from "lucide-react";
+import { Search, Eye, Building2, MapPin, DollarSign, Star, Sparkles, Ban, Heart, Code, Globe, ChevronDown, X, RotateCcw, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { mockJobs, setSelectedJobForDetail, toggleFavorite, isFavorite, TECH_STACK_SUGGESTIONS, LOCATION_SUGGESTIONS } from "@/utils/mockData";
 import { createClient } from "@/lib/supabase/client";
+import { AISearchLoading } from "@/components/search/AISearchLoading";
+import { AISearchInsight } from "@/components/search/AISearchInsight";
+import { AIJobCard } from "@/components/search/AIJobCard";
 
 interface SearchHistoryItem {
   id: string;
@@ -46,6 +49,10 @@ const SearchScreen: React.FC = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  
+  // AI検索結果
+  const [aiIntent, setAiIntent] = useState<any>(null); // AI解釈結果
+  const [aiResults, setAiResults] = useState<any[]>([]); // AI検索結果
   
   // 技術提案の状態
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -242,7 +249,14 @@ const SearchScreen: React.FC = () => {
     if (e) {
       e.preventDefault();
     }
-    // 現在のUIの状態を使って検索を実行し、履歴も保存する
+    
+    // 自然文クエリがあればAI検索を実行
+    if (naturalLanguageSearch.trim()) {
+      await executeAISearch(naturalLanguageSearch);
+      return;
+    }
+    
+    // 詳細条件のみの場合は通常検索
     await executeSearch({
         naturalLanguageSearch,
         excludeConditions,
@@ -251,6 +265,40 @@ const SearchScreen: React.FC = () => {
         minSalary,
         selectedWorkStyles
     }, true);
+  };
+
+  /**
+   * What: AI検索を実行する関数
+   * Why: Chain-of-Thought + Google Grounding + Self-Consistency + Multi-Model の4段階AI処理を呼び出す
+   */
+  const executeAISearch = async (query: string) => {
+    if (isSearching || !query.trim()) return;
+    
+    setIsSearching(true);
+    setAiIntent(null);
+    setAiResults([]);
+    setHasSearched(false);
+    
+    try {
+      const response = await fetch(`/api/search/cot?q=${encodeURIComponent(query)}`);
+      
+      if (!response.ok) {
+        throw new Error('AI Search failed');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setAiIntent(data.data.intent);
+        setAiResults(data.data.candidates);
+      }
+      
+      setHasSearched(true);
+    } catch (error) {
+      console.error('AI Search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   // 最後に保存した条件を保持するRef（同期的な重複チェック用）
@@ -390,29 +438,31 @@ const SearchScreen: React.FC = () => {
    *      また、実行された検索を反映するようにUIの状態（タグ、入力欄）を再構築します。
    */
   const handleHistorySelect = (history: SearchHistoryItem) => {
-    // 履歴データから検索条件オブジェクトを再構築
+    // 履歴データから検索条件をフォームに復元（検索は実行しない）
     if (history.conditions) {
       let restoredMinSalary = 0;
       const salary = history.conditions.minSalary || history.conditions.min_salary;
       const salaryNum = typeof salary === 'number' ? salary : parseInt(salary || '0', 10);
       restoredMinSalary = salaryNum > 10000 ? salaryNum / 10000 : salaryNum;
 
-      const restoredConditions = {
-        naturalLanguageSearch: history.conditions.naturalLanguageSearch || history.conditions.keywords?.join(", ") || "",
-        excludeConditions: history.conditions.excludeConditions || "",
-        selectedTechTags: history.conditions.selectedTechTags || history.conditions.skills || [],
-        selectedLocationTags: history.conditions.selectedLocationTags || history.conditions.locations || [],
-        minSalary: restoredMinSalary,
-        selectedWorkStyles: history.conditions.selectedWorkStyles || history.conditions.employment_type || []
-      };
+      // フォームの状態を復元
+      setNaturalLanguageSearch(history.conditions.naturalLanguageSearch || history.conditions.keywords?.join(", ") || "");
+      setExcludeConditions(history.conditions.excludeConditions || "");
+      setSelectedTechTags(history.conditions.selectedTechTags || history.conditions.skills || []);
+      setSelectedLocationTags(history.conditions.selectedLocationTags || history.conditions.locations || []);
+      setMinSalary(restoredMinSalary);
+      setSelectedWorkStyles(history.conditions.selectedWorkStyles || history.conditions.employment_type || []);
+      
+      // 入力欄を再マウント
+      setTechInputKey(prev => prev + 1);
+      setLocationInputKey(prev => prev + 1);
 
-      // 詳細フィルターを開く
+      // 詳細フィルターを開く（復元した条件を見せるため）
       if (!isFiltersOpen) {
         setIsFiltersOpen(true);
       }
       
-      // 検索実行（履歴保存なし）
-      executeSearch(restoredConditions, false);
+      // 検索は実行しない - ユーザーが検索ボタンを押すまで待つ
     }
   };
 
@@ -873,6 +923,7 @@ const SearchScreen: React.FC = () => {
                 <RotateCcw className="w-4 h-4 mr-2" />
                 条件をクリア
               </Button>
+              
               <Button
                 onClick={handleSearch}
                 variant="gradient"
@@ -888,14 +939,14 @@ const SearchScreen: React.FC = () => {
                       transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                       className="mr-2"
                     >
-                      <Search className="w-5 h-5" />
+                      <Sparkles className="w-5 h-5" />
                     </motion.div>
-                    検索中...
+                    AI分析中...
                   </>
                 ) : (
                   <>
-                    <Search className="w-5 h-5 mr-2" />
-                    検索実行
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    AI検索実行
                   </>
                 )}
               </Button>
@@ -931,9 +982,98 @@ const SearchScreen: React.FC = () => {
         </Card>
       </motion.div>
 
-      {/* Search Results */}
+      {/* AI検索ローディング */}
+      <AnimatePresence>
+        {isSearching && (
+          <AISearchLoading isLoading={isSearching} />
+        )}
+      </AnimatePresence>
+
+      {/* AI検索結果 */}
       <AnimatePresence mode="wait">
-        {searchResults.length > 0 && (
+        {hasSearched && aiResults.length > 0 && !isSearching && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            {/* AI解釈結果 */}
+            {aiIntent && (
+              <AISearchInsight intent={aiIntent} resultCount={aiResults.length} />
+            )}
+
+            {/* 結果ヘッダー */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-primary" />
+                AI検索結果
+                <Badge variant="secondary" className="text-sm">
+                  {aiResults.length}件
+                </Badge>
+              </h2>
+            </div>
+
+            {/* AIジョブカード */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {aiResults.map((job, index) => (
+                <motion.div
+                  key={job.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <AIJobCard
+                    job={job}
+                    onViewDetail={() => {
+                      setSelectedJobForDetail(job);
+                      router.push(`/jobs/${job.id}`);
+                    }}
+                    onToggleFavorite={() => {
+                      toggleFavorite(job.id);
+                      setAiResults([...aiResults]);
+                    }}
+                    isFavorite={isFavorite(job.id)}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* AI検索結果0件 - 通常検索結果もない場合のみ表示 */}
+        {hasSearched && aiResults.length === 0 && searchResults.length === 0 && !isSearching && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+          >
+            <Card className="shadow-lg">
+              <CardContent className="py-12">
+                <div className="text-center space-y-4">
+                  <motion.div
+                    animate={{ y: [0, -10, 0] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="inline-block"
+                  >
+                    <Sparkles className="w-16 h-16 text-muted-foreground mx-auto opacity-50" />
+                  </motion.div>
+                  <p className="text-lg text-muted-foreground">
+                    AIが条件に合う求人を見つけられませんでした。
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    検索条件を変更してお試しください。
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 通常検索結果（詳細条件検索時） */}
+      <AnimatePresence mode="wait">
+        {searchResults.length > 0 && aiResults.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1080,7 +1220,7 @@ const SearchScreen: React.FC = () => {
           </motion.div>
         )}
 
-        {hasSearched && searchResults.length === 0 && (
+        {hasSearched && searchResults.length === 0 && aiResults.length === 0 && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

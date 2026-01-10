@@ -11,10 +11,28 @@ export interface SearchConditions {
   company_characteristics?: string[];
 }
 
+import { SearchIntent } from '../../domain/types/SearchIntent';
+
 // Gemini APIのインターフェース
 export interface IGeminiClient {
   parseSearchQuery(query: string): Promise<SearchConditions>;
+  parseQueryWithCoT(query: string): Promise<SearchIntent>;
+  searchWithGrounding(query: string): Promise<any[]>; // 検索結果（求人リスト）を返す
+  evaluateConsistencyBatch(candidates: any[], intent: SearchIntent): Promise<any[]>; // 検証済みの候補リスト（スコア付き）を返す
+  evaluateTechBatch(companyNames: string[]): Promise<TechEvaluation[]>; // 技術力評価のバッチ処理
   evaluateCompany(companyId: string, companyName: string): Promise<CompanyEvaluation>;
+}
+
+/**
+ * 技術力評価の結果
+ */
+export interface TechEvaluation {
+  companyName: string;
+  tech_score: number; // 0-100
+  tech_stack_modernity: number; // 0-100
+  engineering_culture: number; // 0-100
+  summary: string;
+  strengths: string[]; // 技術的な強み
 }
 
 // 企業評価の型定義
