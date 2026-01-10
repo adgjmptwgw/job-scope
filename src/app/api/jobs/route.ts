@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     // Dependency Injection
     const jobRepository = new SupabaseJobRepository(supabase);
     const searchHistoryRepository = new SupabaseSearchHistoryRepository(supabase);
-    const geminiApiKey = process.env.GEMINI_API_KEY || '';
+    const geminiApiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
     
     console.log('[API] Jobs Search Request:', { 
       query, 

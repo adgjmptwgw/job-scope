@@ -14,8 +14,7 @@ export class SupabaseJobRepository implements IJobRepository {
           id,
           name,
           logo_url,
-          tags,
-          domain
+          tags
         )
       `)
       .eq('id', id)
@@ -45,8 +44,8 @@ export class SupabaseJobRepository implements IJobRepository {
         logo_url: data.companies.logo_url,
         tags: Array.isArray(data.companies.tags) ? data.companies.tags : [],
       },
-      crawled_at: data.crawled_at,
-      created_at: data.created_at || data.crawled_at, // Use crawled_at if created_at fallback
+      crawled_at: data.created_at, // Use created_at as crawled_at
+      created_at: data.created_at,
       is_active: data.is_active,
     };
   }
@@ -65,12 +64,11 @@ export class SupabaseJobRepository implements IJobRepository {
           id,
           name,
           logo_url,
-          tags,
-          domain
+          tags
         )
       `, { count: 'exact' })
       .eq('is_active', true)
-      .gte('crawled_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
 
     // フィルタ適用
     if (conditions.locations && conditions.locations.length > 0) {
@@ -95,7 +93,7 @@ export class SupabaseJobRepository implements IJobRepository {
     }
 
     // ソート: 新しいものから
-    query = query.order('crawled_at', { ascending: false });
+    query = query.order('created_at', { ascending: false });
 
     // ページネーション
     query = query.range(offset, offset + limit - 1);
@@ -126,8 +124,8 @@ export class SupabaseJobRepository implements IJobRepository {
         logo_url: item.companies.logo_url,
         tags: Array.isArray(item.companies.tags) ? item.companies.tags : [],
       },
-      crawled_at: item.crawled_at,
-      created_at: item.crawled_at,
+      crawled_at: item.created_at, // Use created_at as crawled_at
+      created_at: item.created_at,
       is_active: item.is_active,
     }));
 

@@ -50,4 +50,36 @@ export class SupabaseCompanyRepository implements ICompanyRepository {
       updated_at: data.updated_at,
     };
   }
+  async getEvaluation(companyId: string): Promise<import('../../infrastructure/ai/IGeminiClient').CompanyEvaluation | null> {
+    const { data, error } = await this.client
+      .from('company_evaluations')
+      .select('*')
+      .eq('company_id', companyId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return {
+      summary: data.summary,
+      topics: data.topics as any, // JSONB cast
+      generated_at: data.created_at,
+    };
+  }
+
+  async saveEvaluation(companyId: string, evaluation: import('../../infrastructure/ai/IGeminiClient').CompanyEvaluation): Promise<void> {
+    const { error } = await this.client
+      .from('company_evaluations')
+      .insert({
+        company_id: companyId,
+        summary: evaluation.summary,
+        topics: evaluation.topics,
+      });
+
+    if (error) {
+      console.error('Failed to save company evaluation:', error);
+    }
+  }
 }

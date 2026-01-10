@@ -19,7 +19,18 @@ export class CompanyService {
       throw new Error('Company not found');
     }
 
-    // AIによる企業評価を生成
-    return this.geminiClient.evaluateCompany(company.id, company.name);
+    // 1. キャッシュ (DB) を確認
+    const cachedEvaluation = await this.companyRepository.getEvaluation(company.id);
+    if (cachedEvaluation) {
+      return cachedEvaluation;
+    }
+
+    // 2. AIによる企業評価を生成
+    const evaluation = await this.geminiClient.evaluateCompany(company.id, company.name);
+
+    // 3. 結果を保存 (非同期で実行してもよいが、ここではawaitする)
+    await this.companyRepository.saveEvaluation(company.id, evaluation);
+
+    return evaluation;
   }
 }
