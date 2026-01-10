@@ -125,6 +125,9 @@ async function parseQueryWithChainOfThought(query: string): Promise<SearchIntent
     }
   });
   
+  // エラー時はフォールバックせず、呼び出し元に例外を投げる
+  if (!response.ok) throw new Error('Query analysis failed');
+  
   return JSON.parse(extractJSON(response.text()));
 }
 ```
@@ -457,13 +460,19 @@ const companyEvaluations = await Promise.all(
 ## エラーハンドリング
 
 ### AI API エラー
+1日あたりの使用制限やレート制限（429）が発生した場合、以下の戦略をとる。
+
+1. **リトライ**: 指数バックオフを用いて最大 2 回までリトライを実行する。
+2. **モデル切り替え**: 優先モデル（gemini-2.0-flash）が失敗した場合、予備モデル（gemini-flash-latest）を試行する。
+3. **明示的エラー**: リトライ上限に達した場合、モックデータへのフォールバックは行わず、上位レイヤーにエラーを伝播させる。ユーザーにはフロントエンドでエラーメッセージを表示する。
+
 ```typescript
 try {
   const intent = await parseQueryWithCoT(query);
 } catch (error) {
-  // フォールバック: 単純なキーワード抽出
-  const intent = extractKeywordsSimple(query);
+  // フォールバック（キーワード抽出等）は行わず、システムエラーとして通知
   logError('CoT parsing failed', error);
+  throw error; 
 }
 ```
 

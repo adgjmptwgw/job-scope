@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Eye, Building2, MapPin, DollarSign, Star, Sparkles, Ban, Heart, Code, Globe, ChevronDown, X, RotateCcw, Zap } from "lucide-react";
+import { Search, Eye, Building2, MapPin, DollarSign, Star, Sparkles, Ban, Heart, Code, Globe, ChevronDown, X, RotateCcw, Zap, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { mockJobs, setSelectedJobForDetail, toggleFavorite, isFavorite, TECH_STACK_SUGGESTIONS, LOCATION_SUGGESTIONS } from "@/utils/mockData";
 import { createClient } from "@/lib/supabase/client";
@@ -53,6 +53,7 @@ const SearchScreen: React.FC = () => {
   // AI検索結果
   const [aiIntent, setAiIntent] = useState<any>(null); // AI解釈結果
   const [aiResults, setAiResults] = useState<any[]>([]); // AI検索結果
+  const [aiError, setAiError] = useState<string | null>(null); // AI検索エラー
   
   // 技術提案の状態
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -277,13 +278,15 @@ const SearchScreen: React.FC = () => {
     setIsSearching(true);
     setAiIntent(null);
     setAiResults([]);
+    setAiError(null);
     setHasSearched(false);
     
     try {
       const response = await fetch(`/api/search/cot?q=${encodeURIComponent(query)}`);
       
       if (!response.ok) {
-        throw new Error('AI Search failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'AI Search failed');
       }
       
       const data = await response.json();
@@ -294,8 +297,11 @@ const SearchScreen: React.FC = () => {
       }
       
       setHasSearched(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI Search error:', error);
+      setAiError(error.message === 'Internal Server Error' 
+        ? 'AI検索でエラーが発生しました。時間をおいて再度お試しください。' 
+        : error.message);
     } finally {
       setIsSearching(false);
     }
@@ -991,15 +997,28 @@ const SearchScreen: React.FC = () => {
 
       {/* AI検索結果 */}
       <AnimatePresence mode="wait">
-        {hasSearched && aiResults.length > 0 && !isSearching && (
+        {(aiResults.length > 0 || aiError) && !isSearching && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="space-y-6"
           >
-            {/* AI解釈結果 */}
-            {aiIntent && (
+            {/* エラー表示 */}
+            {aiError && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-6 rounded-2xl flex items-center gap-4 shadow-sm backdrop-blur-sm">
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">AI検索を完了できませんでした</h3>
+                  <p className="text-sm opacity-90">{aiError}</p>
+                </div>
+              </div>
+            )}
+            
+            {/* AI解釈結果 (エラー時は非表示) */}
+            {aiIntent && !aiError && (
               <AISearchInsight intent={aiIntent} resultCount={aiResults.length} />
             )}
 

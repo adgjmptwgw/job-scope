@@ -114,22 +114,8 @@ export class GeminiClient implements IGeminiClient {
         search_intent_summary: parsed.search_intent_summary || `「${query}」の検索結果`
       };
     } catch (error: any) {
-      console.error('❌ [Stage 1] エラー発生:', error.message);
-      return {
-        explicit: {
-          locations: [],
-          skills: [],
-          min_salary: null
-        },
-        implicit: {
-          role: undefined,
-          employment_type: [],
-          min_salary: null,
-          company_size: [],
-          nice_to_have: []
-        },
-        search_intent_summary: `「${query}」の検索結果`
-      };
+      console.error('❌ [Stage 1] 意図理解エラー:', error.message);
+      throw error; // フォールバックせずにエラーを投げる
     }
   }
 
@@ -235,23 +221,8 @@ ${query}
       return results;
       
     } catch (error: any) {
-      console.error('❌ [Stage 2] エラー発生:', error.message);
-      console.log('⚠️ フォールバック: モックデータを使用');
-      
-      // フォールバック: モックデータ
-      return [
-        {
-          id: 'fallback-001',
-          title: 'Senior React Engineer',
-          company: { name: 'SmartHR' },
-          location: '東京都渋谷区',
-          salary_min: 8000000,
-          salary_max: 12000000,
-          skills: ['React', 'TypeScript'],
-          source_url: 'https://example.com/job/001',
-          description: 'フロントエンド開発'
-        }
-      ];
+      console.error('❌ [Stage 2] 求人生成エラー:', error.message);
+      throw error; // フォールバックせずにエラーを投げる
     }
   }
 
@@ -638,7 +609,7 @@ ${query}
    */
   private async generateContentWithRetry(prompt: string, temperature: number, maxOutputTokens: number): Promise<Response> {
     const models = ['models/gemini-2.0-flash', 'models/gemini-flash-latest'];
-    const maxRetries = 5; // 429エラー時の最大リトライ回数を増加
+    const maxRetries = 2; // 無料枠の1日あたり制限を考慮し、リトライ回数を削減
     let lastError: any = null;
 
     for (const model of models) {
@@ -647,7 +618,7 @@ ${query}
           console.log(`[Gemini] Trying model: ${model} (attempt ${attempt + 1}/${maxRetries + 1})`);
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 20000); // 20秒タイムアウトに延長
+          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウトに短縮
 
           try {
             const response = await fetch(
@@ -678,7 +649,7 @@ ${query}
 
             // 429 Rate Limit: 指数バックオフでリトライ
             if (response.status === 429) {
-              const waitTime = Math.pow(2, attempt) * 3000; // 3秒, 6秒, 12秒, 24秒...
+              const waitTime = Math.pow(2, attempt) * 5000; // 5秒, 10秒... (間隔を広げて回数を減らす)
               console.warn(`⏳ [Gemini] Rate limit (429). ${waitTime/1000}秒後にリトライ...`);
               await this.sleep(waitTime);
               continue; // 同じモデルでリトライ
