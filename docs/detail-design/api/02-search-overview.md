@@ -64,32 +64,22 @@ graph LR
   - 優先度分類: 必須条件と希望条件に分類
 - **出力**: 構造化された検索意図（JSON）
 
-#### Stage 2: 候補生成（Google Search Grounding）
-- **入力**: Stage 1の検索意図
-- **処理**: AIが最適な「検索クエリ」を生成し、Google検索を実行
-  - 特定の求人サイトに限定せず、Web全体から求人情報を探索
-  - クエリ例: `React 求人 東京 年収800万 site:green-japan.com OR site:indeed.com OR site:wantedly.com OR "採用"`
-  - Google検索機能（Grounding）により、実在する最新の求人ページを取得
-- **出力**: 候補求人リスト（30-50件程度）
+#### Stage 2: AI求人候補生成
+- **入力**: Stage 1の検索意図（構造化データ全体）
+- **処理**: Geminiがユーザーの条件（明示的・暗黙的条件全て）を解釈し、マッチする求人候補を生成
+  - 完全無料
+  - 架空の求人だが、条件に完全マッチ
+  - 「Full Remote」や「副業可」などの細かいニュアンスも反映
+- **出力**: 求人候補リスト（**10件程度**）
 
-#### Stage 3: 検証（Self-Consistency）
-- **入力**: 候補求人リスト
-- **処理**: 候補リスト全体をまとめて3回評価（バッチ処理）
-  - 1回目: 「この求人はユーザーの希望に合っていますか？」
-  - 2回目: 「必須条件を満たしていますか？」
-  - 3回目: 「マッチ度を0-100で評価してください」
-  - 多数決で最終判定（リスト全体を一括評価）
-- **出力**: 検証済み求人リスト（10-20件） + 信頼度スコア
-
-#### Stage 4: 企業評価（Multi-Model Ensemble）
-- **入力**: 検証済み求人の企業リスト
-- **処理**: 企業の評判・口コミを外部ソースから収集し、複数AIで評価
-  1. **情報収集**: 企業名でX（旧Twitter）、OpenWork（公開部）、Techブログ等を検索
-  2. **多角的評価**:
-     - Gemini: 技術力・成長性を評価（技術記事、登壇情報などから）
-     - Claude: ワークライフバランス・企業文化を評価（口コミ、SNSの雰囲気から）
-  3. **統合**: スコアを算出し、情報の信頼度を判定
-- **出力**: 企業評価付き最終結果（10件）
+#### Stage 3+4: 統合検証（Self-Consistency + 企業評価）
+- **入力**: 候補求人リスト + Stage 1 で抽出したユーザーの検索意図
+- **処理**: 同じ質問・同じ条件で候補リスト全体を3回評価し、推論結果の多数派を採用
+  - 同じプロンプトを3回実行（温度パラメータにより出力が変わる）
+  - 各求人について「求人内容のマッチ度」+「企業評価（ユーザー関心事項）」を同時に評価
+  - 3回中2回以上「推薦する」と判定された求人のみを採用（多数決）
+  - これにより、AIの偶発的な誤判定を排除し、企業評価も含めた総合的な信頼度を確保
+- **出力**: 検証済み求人リスト（10-20件） + 信頼度スコア（一致率: 67% or 100%） + 企業評価
 
 ---
 
@@ -105,10 +95,8 @@ sequenceDiagram
     participant Service as SearchService
     participant Stage1 as Stage 1: 意図理解<br/>(Chain-of-Thought)
     participant Stage2 as Stage 2: 候補生成<br/>(Google Grounding)
-    participant Stage3 as Stage 3: 検証<br/>(Self-Consistency)
-    participant Stage4 as Stage 4: 企業評価<br/>(Multi-Model)
+    participant Stage34 as Stage 3+4: 統合検証<br/>(Self-Consistency + 企業評価)
     participant AI as Gemini API
-    participant Claude as Claude API
     participant External as 外部求人サイト
 
     Note over User, External: AI オーケストレーション検索フロー
@@ -122,28 +110,16 @@ sequenceDiagram
     Stage1-->>Service: SearchIntent DTO
     
     Service->>Stage2: generateCandidates(intent)
-    Stage2->>AI: Function Calling (search_jobs_indeed etc.)
-    AI-->>Stage2: 選択された関数 + パラメータ
-    Stage2->>External: 求人検索 API 呼び出し
-    External-->>Stage2: 求人候補リスト
+    Stage2->>AI: Google Grounding検索
+    AI-->>Stage2: 求人候補リスト
     Stage2-->>Service: Job Candidates
     
-    Service->>Stage3: evaluateConsistencyBatch(candidates, intent)
-    loop バッチ評価（3回並列）
-        Stage3->>AI: 評価プロンプト（全件リスト）
-        AI-->>Stage3: 全件のスコアリスト
+    Service->>Stage34: evaluateJobsWithCompanies(candidates, intent)
+    loop 3回のSelf-Consistency評価
+        Stage34->>AI: 求人+企業の統合評価プロンプト
+        AI-->>Stage34: 各求人のスコア+企業評価+推薦判定
     end
-    Stage3-->>Service: 検証済み候補
-    
-    Service->>Stage4: evaluateCompaniesBatch(candidates)
-    par Gemini バッチ評価
-        Stage4->>AI: 全企業の技術力評価
-        AI-->>Stage4: 全企業の評価結果
-    and Claude バッチ評価
-        Stage4->>Claude: 全企業の文化評価
-        Claude-->>Stage4: 全企業の評価結果
-    end
-    Stage4-->>Service: 統合評価結果
+    Stage34-->>Service: 検証済み結果+企業評価
     
     Service-->>API: Response DTO (結果 + 根拠 + 信頼度)
     API-->>Client: 検索結果 (JSON)
@@ -305,7 +281,29 @@ AIが検索クエリ（例: `"React 求人 東京"`）を生成し、Google検�
 同じプロンプトに対して複数回の推論を行い、その結果の多数決（または最も整合性の取れた回答）を採用する手法。
 AIの出力にはランダム性があるため、1回だけの出力よりも、複数回試行して共通する結論を採用する方が信頼性が高まります。(Wang et al., 2022)
 
-### Multi-Model Ensemble (マルチモデル・アンサンブル)
-特性の異なる複数のAIモデル（例: 論理的思考が得意なGeminiと、文章表現が得意なClaude）を組み合わせて使用する手法。
-「Multi-AI」は一般的な専門用語ではないため、機械学習分野で一般的な「Ensemble（アンサンブル）」や「Multi-Model（マルチモデル）」という表現が適切です。単一モデルのバイアスや弱点を補完し合う効果があります。
-\n\n## AI API 実行回数制限 (API Usage Limits)\n\n本システムでは、コストとパフォーマンスを最適化するため、1回の検索リクエストあたりのAI API実行回数に厳格な上限を設ける。\n\n**1リクエストあたりの最大実行回数: 7回**\n\n| ステージ | 実行内容 | 回数 | 備考 |\n|---|---|---|---|\n| **Stage 1** | 意図理解 | **1回** | Gemini: ユーザー入力を解析 |\n| **Stage 2** | 候補生成 | **1回** | Gemini: 検索クエリ生成 + Google検索実行（Grounding） |\n| **Stage 3** | 検証（Self-Consistency） | **3回** | Gemini: 候補リスト全体をまとめて3回評価（バッチ処理） |\n| **Stage 4** | 企業評価（Gemini） | **1回** | Gemini: 全企業の技術力を一括評価（バッチ処理） |\n| **Stage 4** | 企業評価（Claude） | **1回** | Claude: 全企業の文化を一括評価（バッチ処理） |\n| **合計** | | **7回** | これを超える実装は認めない |\n\n※ 候補数（N）が増えても実行回数は変わらない（トークン数は増えるが、回数は固定）。\n※ キャッシュヒット時はさらに回数が減る（Stage 3, 4 はスキップ可能）。
+### ユーザー意図に基づく動的評価
+**ユーザーの検索条件（Stage 1で抽出）**に基づいて、企業を評価する手法。
+
+従来の画一的な評価（全企業を同じ項目で評価）ではなく、ユーザーが気にしている項目だけに焦点を当てて評価します。
+例えば、「残業が少ない企業」を探しているユーザーには「残業時間」について詳しく評価し、「リモートワーク可」を探しているユーザーには「働き方の柔軟性」について評価します。
+
+**多角的評価**: 各項目について、2つの異なる観点（直接的評価・批判的検証）から評価し、結果を統合することで信頼性を高めます。
+
+これにより、ユーザーにとって本当に重要な情報だけを提供でき、評価の精度と関連性が向上します。
+
+
+## AI API 実行回数制限 (API Usage Limits)
+
+本システムでは、コストとパフォーマンスを最適化するため、1回の検索リクエストあたりのAI API実行回数に厳格な上限を設ける。
+
+**1リクエストあたりの最大実行回数: 5回（すべて Gemini API、完全無料）**
+
+| ステージ | 実行内容 | 回数 | 備考 |
+|---|---|---|---|
+| **Stage 1** | 意図理解 | **1回** | Gemini: ユーザー入力を解析 |
+| **Stage 2** | 候補生成 | **1回** | Gemini: 検索クエリ生成 + Google検索実行（Grounding） |
+| **Stage 3+4** | 統合検証（Self-Consistency + 企業評価） | **3回** | Gemini: 同じ条件で3回評価（求人+企業を総合的に判定） |
+| **合計** | | **5回** | すべて無料の Gemini API |
+
+※ 候補数（N）や企業数が増えても実行回数は変わらない（トークン数は増えるが、回数は固定）。
+※ キャッシュヒット時はさらに回数が減る（Stage 3+4 はスキップ可能）。

@@ -24,10 +24,10 @@ export class SupabaseJobRepository implements IJobRepository {
       return null;
     }
 
-    // Map Supabase response to Domain Entity
-    // Note: Assuming 'work_styles' is part of skills or tags in simplified schema, 
-    // or should be added to DB if not present. 
-    // For now, mapping from JSONB or handling defaults.
+    // Supabaseレスポンスをドメインエンティティにマッピング
+    // 注意: work_stylesは簡略化されたスキーマではskillsまたはtagsの一部と想定、
+    // または存在しない場合はDBに追加する必要がある。
+    // 現在は、JSONBからのマッピングまたはデフォルト値の処理を行う。
     
     return {
       id: data.id,
@@ -37,14 +37,14 @@ export class SupabaseJobRepository implements IJobRepository {
       salary_min: data.salary_min,
       salary_max: data.salary_max,
       skills: Array.isArray(data.skills) ? data.skills : [],
-      work_styles: [], // Placeholder as it's not in DB schema explicitly yet, or part of tags
+      work_styles: [], // プレースホルダー（DBスキーマにまだ明示的に含まれていない、またはtagsの一部）
       company: {
         id: data.companies.id,
         name: data.companies.name,
         logo_url: data.companies.logo_url,
         tags: Array.isArray(data.companies.tags) ? data.companies.tags : [],
       },
-      crawled_at: data.created_at, // Use created_at as crawled_at
+      crawled_at: data.created_at, // created_atをcrawled_atとして使用
       created_at: data.created_at,
       is_active: data.is_active,
     };
@@ -124,7 +124,7 @@ export class SupabaseJobRepository implements IJobRepository {
         logo_url: item.companies.logo_url,
         tags: Array.isArray(item.companies.tags) ? item.companies.tags : [],
       },
-      crawled_at: item.created_at, // Use created_at as crawled_at
+      crawled_at: item.created_at, // created_atをcrawled_atとして使用
       created_at: item.created_at,
       is_active: item.is_active,
     }));

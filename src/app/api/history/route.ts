@@ -7,12 +7,18 @@ import { NextResponse } from 'next/server';
  *      データベースのRLS（行レベルセキュリティ）により、ユーザーは自分の履歴のみを参照できますが、ここでも早期リターンのために認証チェックを行います。
  */
 export async function GET() {
+  console.log('\n📡 API REQUEST: GET /api/history');
+  console.log('⏰ timestamp:', new Date().toISOString());
+  
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    console.log('❌ auth_error: user not found');
+    return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
   }
+
+  console.log('👤 user_id:', user.id);
 
   const { data, error } = await supabase
     .from('search_histories')
@@ -38,17 +44,26 @@ export async function GET() {
  *      3. その上位10件リストに含まれないアイテムを削除します。
  */
 export async function POST(request: Request) {
+  console.log('\n📡 API REQUEST: POST /api/history');
+  console.log('⏰ timestamp:', new Date().toISOString());
+  
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
+    console.log('❌ auth_error: user not found');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { conditions, summary } = await request.json();
+  
+  console.log('👤 user_id:', user.id);
+  console.log('📝 summary:', summary);
+  console.log('🔍 conditions:', JSON.stringify(conditions, null, 2));
 
   if (!conditions || !summary) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    console.log('❌ validation_error: missing required fields');
+    return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 });
   }
 
   // 1. Insert new history
@@ -66,9 +81,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  // 2. Cleanup old history (keep top 15)
-  // Logic: Get the 16th item's created_at, delete anything older or equal to it (excluding top 15)
-  // A simpler approach for "Max 15" without transactions (Supabase REST) is doing a fetch-then-delete
+  // 2. Cleanup old history (keep top 10)
+  // Logic: Get the 11th item's created_at, delete anything older or equal to it (excluding top 10)
+  // A simpler approach for "Max 10" without transactions (Supabase REST) is doing a fetch-then-delete
   // or a subquery delete if permitted.
   
   // Fetch IDs to keep

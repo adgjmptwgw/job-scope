@@ -124,7 +124,9 @@ export default function JobDetail() {
               <div className="flex flex-wrap items-center gap-6 text-muted-foreground pt-2">
                 <div className="flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-primary" />
-                  <span className="font-medium text-foreground text-lg">{job.company}</span>
+                  <span className="font-medium text-foreground text-lg">
+                    {typeof job.company === 'string' ? job.company : job.company?.name || '企業名不明'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <MapPin className="w-5 h-5" />
@@ -138,7 +140,19 @@ export default function JobDetail() {
             </div>
             
             <div className="flex flex-col items-end gap-2 pt-2">
-              {/* 将来のアクションはここに */}
+              {/* 求人サイトへのリンク */}
+              {job.sourceUrl && (
+                <a
+                  href={job.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button className="gap-2">
+                    <ExternalLink className="w-4 h-4" />
+                    求人サイトで見る
+                  </Button>
+                </a>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -185,29 +199,47 @@ export default function JobDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-10 pt-4">
-            <div className="space-y-8">
+            <div className="space-y-6">
               {job.evaluationItems && job.evaluationItems.map((item: any, idx: number) => (
-                <div key={idx} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                    <h4 className="font-bold text-lg text-foreground/90">{item.category}</h4>
+                <div key={idx} className="p-4 bg-accent/5 rounded-xl border border-accent/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+                      <h4 className="font-bold text-lg text-foreground/90">{item.category}</h4>
+                    </div>
+                    {item.score && (
+                      <div className="flex items-center gap-1 bg-accent/10 px-3 py-1 rounded-full">
+                        <Star className="w-4 h-4 text-accent fill-accent" />
+                        <span className="font-bold text-accent">{item.score.toFixed(1)}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex flex-col gap-2 pl-4">
+                  {item.summary && (
+                    <p className="text-sm text-muted-foreground leading-relaxed pl-4">
+                      {item.summary}
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-1 pl-4">
                     {item.links.map((link: string, lIdx: number) => (
                       <a 
                         key={lIdx}
                         href={link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:underline flex items-center gap-2 text-sm break-all"
+                        className="text-primary hover:underline flex items-center gap-2 text-xs"
                       >
                         <ExternalLink className="w-3 h-3 shrink-0" />
-                        {link}
+                        口コミを見る
                       </a>
                     ))}
                   </div>
                 </div>
               ))}
+              {(!job.evaluationItems || job.evaluationItems.length === 0) && (
+                <p className="text-muted-foreground text-center py-8">
+                  この企業の評価データはまだありません
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

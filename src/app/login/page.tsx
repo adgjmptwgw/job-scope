@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { User, Lock, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -15,6 +16,7 @@ const LoginScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const { refreshAuth } = useAuth();
 
   /**
    * What: Supabaseを介してユーザー認証を処理します。
@@ -35,15 +37,12 @@ const LoginScreen: React.FC = () => {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        // セッション更新を待つため少し待機
-        setTimeout(() => {
-           router.push('/search');
-           router.refresh(); 
-        }, 500);
+        // セッションを再取得してから遷移
+        await refreshAuth();
+        router.push('/search');
       } else {
         const errorData = await res.json();
-        setError(`ログイン失敗: ${errorData.error || '不明なエラー'}`);
+        setError(errorData.error || '不明なエラーが発生しました');
       }
     } catch (error) {
       console.error('Login error:', error);

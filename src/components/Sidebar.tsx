@@ -58,7 +58,7 @@ const Sidebar: React.FC = () => {
     >
       {/* サイドバーヘッダー / ロゴ */}
       <div className="p-6 h-20 flex items-center">
-        <Link href="/" className="flex items-center gap-3 group">
+        <Link href="/search" className="flex items-center gap-3 group">
           <div className="bg-gradient-to-br from-primary to-accent p-2 rounded-lg shadow-glow group-hover:scale-110 transition-transform duration-300">
             <Briefcase className="w-5 h-5 text-white" />
           </div>

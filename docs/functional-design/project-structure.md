@@ -11,19 +11,19 @@
 | `package.json` | プロジェクトの依存関係 (Next.js, React, Supabase SDK等) とスクリプト定義。 |
 | `.env.local` | 環境変数設定ファイル (APIキーなど)。Git管理外。 |
 | `secrets.md` | **(Git管理外)** 機密情報のメモ用ファイル。 |
+| `.agent/rules.md` | AIエージェントの行動指針・開発ルール。 |
 
 ---
 
 ## `src/` ディレクトリ (Source Code)
 
-アプリケーションの主要なソースコードが格納されています。
 
 ### 1. `src/app/` (Next.js App Router)
 Next.js 13+ の App Router 機能をベースとした、ページとAPIルートの定義です。
 
 - **`src/app/api/`**: バックエンドAPIのエンドポイント (Route Handlers)。
     - ここではビジネスロジックを持たず、**Service Layer** を呼び出してレスポンスを返す役割に徹します。
-- **`src/app/(pages)/`**: 各画面のページコンポーネント (`page.tsx`)。
+- **`src/app/`**: 各画面のページコンポーネント (`page.tsx`)。
     - `search/`: 求人検索画面
     - `jobs/[id]/`: 求人詳細画面
     - `settings/`: 設定画面

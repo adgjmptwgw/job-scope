@@ -49,7 +49,7 @@ erDiagram
 
 ### 1. `companies` (企業マスタ)
 
-クローリングによって収集された企業情報を管理する。`domain` をユニークキーとして重複を防ぐ。
+AI検索によって評価された企業情報を管理する。`domain` をユニークキーとして重複を防ぐ。
 
 | カラム名 | データ型 | 制約 | 説明 |
 | :--- | :--- | :--- | :--- |
@@ -77,7 +77,7 @@ erDiagram
 | `skills` | `jsonb` | Default: `[]` | 必須・歓迎スキルタグ |
 | `source_url` | `text` | UNIQUE, NOT NULL | 求人元ページのURL |
 | `is_active` | `boolean` | Default: `true` | 求人が現在募集中かどうか |
-| `crawled_at` | `timestamptz` | Default: `now()` | クローリング日時 (鮮度管理に使用) |
+| `evaluated_at` | `timestamptz` | Default: `now()` | AI評価日時 (鮮度管理に使用) |
 
 ### 3. `job_favorites` (お気に入り)
 
@@ -103,7 +103,7 @@ erDiagram
 | `summary` | `text` | NOT NULL | 人間可読な要約テキスト |
 | `created_at` | `timestamptz` | Default: `now()` | 作成日時 |
 
-- **制約**: アプリケーション側またはトリガーで「1ユーザーあたり最大15件」に制限される。
+- **制約**: アプリケーション側またはトリガーで「1ユーザーあたり最大10件」に制限される。
 
 ### 5. `users` (ユーザープロファイル)
 

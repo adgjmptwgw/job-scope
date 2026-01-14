@@ -13,7 +13,8 @@ import {
   Code,
   Users,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Briefcase
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,14 +82,14 @@ export const AIJobCard: React.FC<AIJobCardProps> = ({
 
   // スコアに応じた色を取得
   const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-success";
-    if (score >= 70) return "text-primary";
+    if (score >= 4.5) return "text-success";
+    if (score >= 3.5) return "text-primary";
     return "text-muted-foreground";
   };
 
   const getScoreBg = (score: number) => {
-    if (score >= 90) return "bg-success/10 border-success/30";
-    if (score >= 70) return "bg-primary/10 border-primary/30";
+    if (score >= 4.5) return "bg-success/10 border-success/30";
+    if (score >= 3.5) return "bg-primary/10 border-primary/30";
     return "bg-muted/50 border-muted";
   };
 
@@ -111,10 +112,10 @@ export const AIJobCard: React.FC<AIJobCardProps> = ({
               <p className="text-foreground/70 font-medium">{job.company.name}</p>
             </div>
             
-            {/* マッチ度スコア */}
-            <div className={`flex flex-col items-center p-3 rounded-xl border ${getScoreBg(job.confidence)}`}>
-              <span className={`text-2xl font-bold ${getScoreColor(job.confidence)}`}>
-                {job.confidence}
+            {/* マッチ度スコア (5点満点) */}
+            <div className={`flex flex-col items-center p-3 rounded-xl border ${getScoreBg(job.company_evaluation?.overall_score || 0)}`}>
+              <span className={`text-2xl font-bold ${getScoreColor(job.company_evaluation?.overall_score || 0)}`}>
+                {job.company_evaluation?.overall_score?.toFixed(1) || '-'}
               </span>
               <span className="text-xs text-muted-foreground">マッチ度</span>
             </div>
@@ -167,7 +168,7 @@ export const AIJobCard: React.FC<AIJobCardProps> = ({
                 className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
               >
                 {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                企業評価を{isExpanded ? "隠す" : "表示"}
+                仕事の詳細を{isExpanded ? "閉じる" : "見る"}
               </button>
               
               {isExpanded && (
@@ -177,89 +178,31 @@ export const AIJobCard: React.FC<AIJobCardProps> = ({
                   exit={{ height: 0, opacity: 0 }}
                   className="mt-4 space-y-4"
                 >
-                  {/* 総合スコア */}
-                  <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-xl">
-                    <div className="text-center">
-                      <div className={`text-3xl font-bold ${getScoreColor(job.company_evaluation.overall_score)}`}>
-                        {job.company_evaluation.overall_score}
-                      </div>
-                      <div className="text-xs text-muted-foreground">総合スコア</div>
+
+                  {/* 業務内容 */}
+                  <div className="p-4 bg-primary/5 rounded-xl border border-primary/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Briefcase className="w-4 h-4 text-primary" />
+                      <span className="font-bold text-primary">業務内容</span>
                     </div>
-                    <div className="flex-1 grid grid-cols-2 gap-4">
-                      {/* 技術力 */}
-                      {job.company_evaluation.tech && (
-                        <div className="flex items-center gap-2">
-                          <Code className="w-4 h-4 text-primary" />
-                          <div>
-                            <div className="text-sm font-medium">技術力</div>
-                            <div className="text-lg font-bold text-primary">
-                              {job.company_evaluation.tech.tech_score}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* 文化 */}
-                      {job.company_evaluation.culture && (
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-accent" />
-                          <div>
-                            <div className="text-sm font-medium">企業文化</div>
-                            <div className="text-lg font-bold text-accent">
-                              {job.company_evaluation.culture.culture_score}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <p className="text-sm text-foreground/80 leading-relaxed">
+                      {job.description}
+                    </p>
                   </div>
 
-                  {/* 技術評価詳細 */}
-                  {job.company_evaluation.tech && (
-                    <div className="p-4 bg-primary/5 rounded-xl border border-primary/20">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Code className="w-4 h-4 text-primary" />
-                        <span className="font-bold text-primary">技術力評価 (Gemini)</span>
-                      </div>
-                      <p className="text-sm text-foreground/80 mb-2">
-                        {job.company_evaluation.tech.summary}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {job.company_evaluation.tech.strengths.map((s, i) => (
-                          <Badge key={i} variant="outline" className="bg-primary/10 text-primary text-xs">
-                            {s}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 文化評価詳細 */}
-                  {job.company_evaluation.culture && (
+                  {/* 勤務形態 */}
+                  {(job as any).workStyles && (job as any).workStyles.length > 0 && (
                     <div className="p-4 bg-accent/5 rounded-xl border border-accent/20">
                       <div className="flex items-center gap-2 mb-2">
-                        <Users className="w-4 h-4 text-accent" />
-                        <span className="font-bold text-accent">企業文化評価 (Claude)</span>
+                        <MapPin className="w-4 h-4 text-accent" />
+                        <span className="font-bold text-accent">勤務形態</span>
                       </div>
-                      <p className="text-sm text-foreground/80 mb-2">
-                        {job.company_evaluation.culture.summary}
-                      </p>
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap gap-2">
-                          {job.company_evaluation.culture.highlights.map((h, i) => (
-                            <Badge key={i} variant="outline" className="bg-success/10 text-success text-xs">
-                              ✓ {h}
-                            </Badge>
-                          ))}
-                        </div>
-                        {job.company_evaluation.culture.concerns.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {job.company_evaluation.culture.concerns.map((c, i) => (
-                              <Badge key={i} variant="outline" className="bg-warning/10 text-warning text-xs">
-                                ⚠ {c}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
+                      <div className="flex flex-wrap gap-2">
+                        {(job as any).workStyles.map((style: string, i: number) => (
+                          <Badge key={i} variant="outline" className="bg-accent/10 text-accent text-xs">
+                            {style}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -285,7 +228,7 @@ export const AIJobCard: React.FC<AIJobCardProps> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open(job.source_url, '_blank')}
+              onClick={() => window.open((job as any).sourceUrl || job.source_url, '_blank')}
             >
               <ExternalLink className="w-4 h-4 mr-1" />
               求人サイト

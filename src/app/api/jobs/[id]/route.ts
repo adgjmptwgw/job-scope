@@ -14,9 +14,14 @@ export async function GET(
   const params = await props.params;
   try {
     const { id } = params;
+    
+    console.log('\n📡 API REQUEST: GET /api/jobs/[id]');
+    console.log('⏰ timestamp:', new Date().toISOString());
+    console.log('📝 job_id:', id);
 
     if (!id) {
-      return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+      console.log('❌ validation_error: id is required');
+      return NextResponse.json({ error: 'IDが必要です' }, { status: 400 });
     }
 
     // Dependency Injection
@@ -27,12 +32,12 @@ export async function GET(
     const job = await service.getJob(id);
 
     if (!job) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+      return NextResponse.json({ error: '求人が見つかりません' }, { status: 404 });
     }
 
     return NextResponse.json(job);
   } catch (error) {
     console.error('Error in GET /api/jobs/[id]:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }

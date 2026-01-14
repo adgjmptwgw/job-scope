@@ -14,5 +14,6 @@ export interface SearchIntent {
     must_have?: string[];
     [key: string]: any;
   };
+  exclude?: string[];  // 除外条件
   search_intent_summary: string;
 }

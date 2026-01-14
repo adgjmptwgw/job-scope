@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error } = await supabase.auth.getUser();
 
     if (error || !user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
     }
 
     return NextResponse.json({
@@ -20,6 +20,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error in GET /api/auth/me:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }

@@ -9,7 +9,7 @@ export async function DELETE(request: NextRequest) {
     const { data: { user }, error: getUserError } = await supabase.auth.getUser();
 
     if (getUserError || !user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
     }
 
     // ユーザーアカウントを削除
@@ -22,7 +22,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to sign out' }, { status: 500 });
+      return NextResponse.json({ error: 'ログアウトに失敗しました' }, { status: 500 });
     }
 
     // TODO: Service Role Keyを使用してadmin.deleteUser()を呼び出す
@@ -31,6 +31,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Account deletion initiated' });
   } catch (error) {
     console.error('Error in DELETE /api/auth/user:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }

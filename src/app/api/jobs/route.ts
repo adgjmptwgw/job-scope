@@ -15,6 +15,10 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const limit = parseInt(searchParams.get('limit') || '20');
 
+    console.log('\n📡 API REQUEST: GET /api/jobs');
+    console.log('⏰ 時刻:', new Date().toISOString());
+    console.log('📝 パラメータ:', { query, locations, skills, minSalary, offset, limit });
+
     // 認証チェック（オプション）
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -44,6 +48,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error in GET /api/jobs:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }

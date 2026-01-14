@@ -41,3 +41,6 @@ next-env.d.ts
 supabase/functions/*/deno.lock
 secrets
 secrets.md
+
+# Other
+実装計画メモ.md

@@ -66,7 +66,7 @@ export class SupabaseJobFavoriteRepository implements IJobFavoriteRepository {
       .single();
 
     if (error || !data) {
-      throw new Error('Failed to create favorite');
+      throw new Error('お気に入りの登録に失敗しました');
     }
 
     return {
@@ -84,7 +84,7 @@ export class SupabaseJobFavoriteRepository implements IJobFavoriteRepository {
       .eq('job_id', jobId);
 
     if (error) {
-      throw new Error('Failed to delete favorite');
+      throw new Error('お気に入りの削除に失敗しました');
     }
   }
 

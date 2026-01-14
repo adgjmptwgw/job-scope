@@ -16,14 +16,32 @@ interface AISearchLoadingProps {
 }
 
 const STAGES = [
-  { id: 1, label: "意図を理解中...", icon: Brain, duration: 1500 },
-  { id: 2, label: "求人を検索中...", icon: Search, duration: 2000 },
-  { id: 3, label: "マッチ度を検証中...", icon: CheckCircle, duration: 1500 },
-  { id: 4, label: "企業を評価中...", icon: Building2, duration: 1000 },
+  { id: 1, label: "意図を理解中...", icon: Brain, duration: 2500 },
+  { id: 2, label: "求人を検索中...", icon: Search, duration: 4000 },
+  { id: 3, label: "マッチ度を検証中...", icon: CheckCircle, duration: 4000 },
+  { id: 4, label: "企業を評価中...", icon: Building2, duration: 100000 }, // 最後はずっと終わらないように長くする
 ];
 
 export const AISearchLoading: React.FC<AISearchLoadingProps> = ({ isLoading }) => {
   const [currentStage, setCurrentStage] = useState(0);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  /**
+   * What: ローディング表示開始時に自分自身の位置へスクロールします。
+   * Why: ユーザーが検索の進行状況を確実に見逃さないようにします。
+   */
+  useEffect(() => {
+    if (isLoading && containerRef.current) {
+      // マウント直後は高さが確定していない可能性があるため、わずかに遅延させる
+      setTimeout(() => {
+        if (!containerRef.current) return;
+        const element = containerRef.current;
+        const yOffset = -200; // ヘッダー分などを考慮したオフセット
+        const y = element.getBoundingClientRect().top + window.scrollY + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }, 100);
+    }
+  }, [isLoading]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -36,11 +54,19 @@ export const AISearchLoading: React.FC<AISearchLoadingProps> = ({ isLoading }) =
     const timers: NodeJS.Timeout[] = [];
 
     STAGES.forEach((stage, index) => {
-      const timer = setTimeout(() => {
-        setCurrentStage(index + 1);
-      }, totalDelay);
-      timers.push(timer);
-      totalDelay += stage.duration;
+      // 最後のステージの場合はタイマーを設定しない（ずっとローディング中のまま）
+      if (index === STAGES.length - 1) {
+        const timer = setTimeout(() => {
+          setCurrentStage(index + 1);
+        }, totalDelay);
+        timers.push(timer);
+      } else {
+        const timer = setTimeout(() => {
+          setCurrentStage(index + 1);
+        }, totalDelay);
+        timers.push(timer);
+        totalDelay += stage.duration;
+      }
     });
 
     return () => {
@@ -52,6 +78,7 @@ export const AISearchLoading: React.FC<AISearchLoadingProps> = ({ isLoading }) =
 
   return (
     <motion.div
+      ref={containerRef}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}

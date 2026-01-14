@@ -2,213 +2,380 @@ export const mockJobs = [
   { 
     id: '1', 
     title: 'フロントエンドエンジニア', 
-    company: 'Tech Corp', 
-    description: 'React, TypeScriptを使用した開発', 
+    company: '株式会社メルカリ', 
+    description: 'メルカリのWebフロントエンド開発。React/TypeScriptを使用したプロダクト開発、パフォーマンス最適化、アクセシビリティ向上に取り組みます。', 
     score: 4.5, 
-    location: '東京都', 
-    salary: '1200-1600万円', 
-    salaryMinInt: 1200,
-    requirements: 'React経験3年以上', 
+    location: '東京都港区', 
+    salary: '800-1500万円', 
+    salaryMinInt: 800,
+    requirements: 'React/TypeScript経験3年以上、Webパフォーマンス最適化経験', 
     languages: ['TypeScript', 'JavaScript'],
     frameworks: ['React', 'Next.js'],
-    infrastructure: ['AWS', 'Vercel'],
-    workStyles: ['Remote', 'Flex'],
+    infrastructure: ['GCP', 'Kubernetes'],
+    workStyles: ['リモート可', 'フレックス'],
     evaluationItems: [
-      { category: '残業時間', links: ['https://example.com/tech-corp/overtime'] },
-      { category: '社員同士の仲', links: ['https://example.com/tech-corp/culture-1'] }
+      { 
+        category: '残業時間', 
+        score: 4.0,
+        summary: '月平均20〜30時間程度。裁量労働制で柔軟な働き方が可能。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0910000000FrPG'] 
+      },
+      { 
+        category: '社員同士の仲', 
+        score: 4.3,
+        summary: 'フラットな組織文化。多国籍なチームで英語を使う機会も多い。',
+        links: ['https://engineering.mercari.com/blog/entry/20231219-mercari-advent-calendar-2023-day19/'] 
+      },
+      { 
+        category: '成長環境', 
+        score: 4.5,
+        summary: '技術カンファレンス参加支援、書籍購入制度あり。社内勉強会が活発。',
+        links: ['https://mercan.mercari.com/articles/39584/'] 
+      }
     ],
-    aiReason: '技術スタックとワークライフバランスの評価が高い。'
+    aiReason: 'モダンな技術スタックとグローバルな環境が魅力。成長機会が豊富。',
+    sourceUrl: 'https://careers.mercari.com/'
   },
   { 
     id: '2', 
     title: 'バックエンドエンジニア', 
-    company: 'Innovate Inc', 
-    description: 'Node.js, TypeScript, PostgreSQLを使用した開発', 
+    company: '株式会社サイバーエージェント', 
+    description: 'ABEMAやAmebaなど大規模サービスのバックエンド開発。Go/Java/Scalaを使用した高トラフィックシステムの設計・実装。', 
     score: 4.2, 
-    location: '大阪府', 
-    salary: '500-900万円', 
+    location: '東京都渋谷区', 
+    salary: '500-1200万円', 
     salaryMinInt: 500,
-    requirements: 'Node.js経験2年以上', 
-    languages: ['TypeScript', 'Node.js', 'Go'],
-    frameworks: ['Express', 'Prisma'],
-    infrastructure: ['GCP', 'Docker', 'Kubernetes'],
-    workStyles: ['Full Remote', 'Full Flex'],
+    requirements: 'バックエンド開発経験3年以上、Go/Java/Scala経験', 
+    languages: ['Go', 'Java', 'Scala'],
+    frameworks: ['Spring Boot', 'gRPC'],
+    infrastructure: ['AWS', 'GCP', 'Kubernetes'],
+    workStyles: ['リモート可', 'フレックス'],
     evaluationItems: [
-      { category: '残業時間', links: ['https://example.com/innovate/overtime'] }
+      { 
+        category: '残業時間', 
+        score: 3.5,
+        summary: '部署による差あり。メディア事業は繁忙期が多い傾向。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0910000000FrQk'] 
+      },
+      { 
+        category: '給与水準', 
+        score: 4.2,
+        summary: '業界水準より高め。グレード制で明確な評価基準。',
+        links: ['https://developers.cyberagent.co.jp/blog/archives/47764/'] 
+      }
     ],
-    aiReason: 'パフォーマンスとスケーラビリティに対する貢献度が高い。'
+    aiReason: '大規模サービス開発経験を積める環境。若手の裁量が大きい。',
+    sourceUrl: 'https://www.cyberagent.co.jp/careers/'
   },
   { 
     id: '3', 
     title: 'SREエンジニア', 
-    company: 'Cloud Solutions', 
-    description: 'AWS, Docker, Kubernetesを用いたSRE業務', 
+    company: '株式会社SmartHR', 
+    description: 'クラウド人事労務ソフト「SmartHR」のインフラ基盤の設計・構築・運用。可用性とセキュリティの向上に取り組みます。', 
     score: 4.8, 
-    location: '福岡県', 
-    salary: '1000-1400万円', 
-    salaryMinInt: 1000,
-    requirements: 'AWS実務経験1年以上', 
-    languages: ['Go', 'Python', 'Terraform'],
-    frameworks: [],
-    infrastructure: ['AWS', 'Docker', 'Kubernetes', 'CircleCI'],
-    workStyles: ['Remote', 'Flex'],
+    location: '東京都港区', 
+    salary: '700-1200万円', 
+    salaryMinInt: 700,
+    requirements: 'AWS/GCP経験、Terraform/Kubernetes経験', 
+    languages: ['Go', 'Ruby', 'Terraform'],
+    frameworks: ['Ruby on Rails'],
+    infrastructure: ['AWS', 'Docker', 'Kubernetes', 'Datadog'],
+    workStyles: ['フルリモート', 'フレックス'],
     evaluationItems: [
-      { category: '安定性', links: ['https://example.com/cloud-sl/benefits'] }
+      { 
+        category: '安定性', 
+        score: 4.6,
+        summary: 'SaaS市場でトップシェア。ARR成長率も高く事業基盤は安定。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0C10000019qFXv'] 
+      },
+      { 
+        category: '技術力', 
+        score: 4.7,
+        summary: 'テックブログ発信が活発。OSSへの貢献も積極的。',
+        links: ['https://tech.smarthr.jp/entry/2023/12/25/090000'] 
+      }
     ],
-    aiReason: 'インフラの信頼性と効率化に対する評価が高い。'
+    aiReason: 'フルリモート可能で働きやすい。技術力の高いチーム。',
+    sourceUrl: 'https://smarthr.co.jp/recruit/'
   },
   { 
     id: '4', 
-    title: 'AIエンジニア / データサイエンティスト', 
-    company: 'Future AI', 
-    description: '生成AIモデルの構築と最適化', 
+    title: '機械学習エンジニア', 
+    company: '株式会社Preferred Networks', 
+    description: '深層学習フレームワークの開発、大規模言語モデルの研究開発。世界トップクラスのAI研究環境。', 
     score: 4.9, 
-    location: '東京都', 
-    salary: '1500-2000万円', 
-    salaryMinInt: 1500,
-    requirements: 'PyTorch, TensorFlow経験', 
-    languages: ['Python', 'C++'],
-    frameworks: ['PyTorch', 'TensorFlow'],
-    infrastructure: ['AWS', 'GCP'],
-    workStyles: ['Full Remote'],
-    evaluationItems: [],
-    aiReason: '最先端技術への取り組みが非常に高い評価。'
+    location: '東京都千代田区', 
+    salary: '800-2000万円', 
+    salaryMinInt: 800,
+    requirements: 'PyTorch/TensorFlow経験、機械学習の論文実装経験', 
+    languages: ['Python', 'C++', 'CUDA'],
+    frameworks: ['PyTorch', 'JAX'],
+    infrastructure: ['AWS', 'GCP', 'オンプレGPUクラスタ'],
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '技術力', 
+        score: 4.9,
+        summary: '世界トップレベルのAI研究。国際学会での発表実績多数。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0C1000000xF8Fr'] 
+      },
+      { 
+        category: '成長環境', 
+        score: 4.8,
+        summary: '研究者と直接議論できる環境。学会参加・論文投稿を強力支援。',
+        links: ['https://tech.preferred.jp/ja/blog/'] 
+      }
+    ],
+    aiReason: '最先端AI研究に携われる日本屈指の環境。',
+    sourceUrl: 'https://www.preferred.jp/ja/careers/'
   },
   { 
     id: '5', 
-    title: 'モバイルアプリエンジニア', 
-    company: 'App Works', 
-    description: 'Flutterを用いたクロスプラットフォーム開発', 
-    score: 3.8, 
-    location: '東京都', 
-    salary: '600-900万円', 
+    title: 'iOSエンジニア', 
+    company: 'LINEヤフー株式会社', 
+    description: 'LINEアプリのiOS開発。Swift/Objective-Cを使用した大規模アプリ開発、新機能実装。', 
+    score: 4.3, 
+    location: '東京都新宿区', 
+    salary: '600-1200万円', 
     salaryMinInt: 600,
-    requirements: 'Flutter経験1年以上', 
-    languages: ['Dart', 'Swift', 'Kotlin'],
-    frameworks: ['Flutter'],
-    infrastructure: ['Firebase'],
-    workStyles: ['Remote'],
-    evaluationItems: [],
-    aiReason: 'モダンなモバイル開発環境が整っている。'
+    requirements: 'iOS開発経験3年以上、Swift経験必須', 
+    languages: ['Swift', 'Objective-C'],
+    frameworks: ['UIKit', 'SwiftUI'],
+    infrastructure: ['AWS', 'Verda'],
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '技術力', 
+        score: 4.5,
+        summary: '大規模アプリ開発のノウハウが豊富。社内勉強会も活発。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0910000000FrT3'] 
+      },
+      { 
+        category: '給与水準', 
+        score: 4.0,
+        summary: '業界水準並み。グレード制で透明性のある評価。',
+        links: ['https://engineering.linecorp.com/ja/blog/line-developer-career-document'] 
+      }
+    ],
+    aiReason: '国内最大級のユーザー基盤を持つプロダクト開発に携われる。',
+    sourceUrl: 'https://www.lycorp.co.jp/ja/recruit/'
   },
   { 
     id: '6', 
-    title: 'Goバックエンドエンジニア', 
-    company: 'FinTech Lab', 
-    description: '大規模金融システムのマイクロサービス化', 
-    score: 4.6, 
-    location: '東京都', 
-    salary: '1000-1500万円', 
-    salaryMinInt: 1000,
-    requirements: 'Go言語での開発経験', 
-    languages: ['Go', 'SQL'],
-    frameworks: ['Gin', 'Echo'],
-    infrastructure: ['AWS', 'Docker'],
-    workStyles: ['Flex'],
-    evaluationItems: [],
-    aiReason: '堅牢なシステム設計と高い技術力が魅力。'
+    title: 'バックエンドエンジニア（FinTech）', 
+    company: '株式会社マネーフォワード', 
+    description: '家計簿アプリ・法人向けSaaSのバックエンド開発。Ruby/Goを使用したAPI開発。', 
+    score: 4.4, 
+    location: '東京都港区', 
+    salary: '600-1100万円', 
+    salaryMinInt: 600,
+    requirements: 'Ruby/Go経験、API設計経験', 
+    languages: ['Ruby', 'Go'],
+    frameworks: ['Ruby on Rails', 'Gin'],
+    infrastructure: ['AWS', 'Docker', 'Kubernetes'],
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '成長環境', 
+        score: 4.5,
+        summary: 'エンジニア主導の技術選定。カンファレンス登壇も奨励。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0C10000005kHJh'] 
+      },
+      { 
+        category: '社員同士の仲', 
+        score: 4.3,
+        summary: 'バリューを大切にする文化。オープンなコミュニケーション。',
+        links: ['https://note.com/moneyforward/n/nc25329e4867d'] 
+      }
+    ],
+    aiReason: 'FinTech領域でのプロダクト開発経験が積める成長企業。',
+    sourceUrl: 'https://recruit.moneyforward.com/'
   },
   { 
     id: '7', 
-    title: 'UI/UXデザイナー', 
-    company: 'Creative Studio', 
-    description: 'ウェブ・アプリのデザインシステム構築', 
-    score: 4.0, 
-    location: '神奈川県', 
-    salary: '500-800万円', 
-    salaryMinInt: 500,
-    requirements: 'Figma実務経験', 
+    title: 'プロダクトデザイナー', 
+    company: 'freee株式会社', 
+    description: 'クラウド会計ソフト「freee」のUI/UXデザイン。ユーザーリサーチからUIデザインまで。', 
+    score: 4.2, 
+    location: '東京都品川区', 
+    salary: '550-900万円', 
+    salaryMinInt: 550,
+    requirements: 'Figma実務経験、プロダクトデザイン経験3年以上', 
     languages: [],
     frameworks: [],
     infrastructure: [],
-    workStyles: ['Remote', 'Flex'],
-    evaluationItems: [],
-    aiReason: 'デザイン文化が根付いており、働きやすい環境。'
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '残業時間', 
+        score: 4.0,
+        summary: '平均20時間程度。フレックス活用で柔軟な働き方が可能。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0C10000009YCWQ'] 
+      },
+      { 
+        category: '成長環境', 
+        score: 4.2,
+        summary: 'デザインシステム構築に注力。デザイナー同士の交流が活発。',
+        links: ['https://developers.freee.co.jp/entry/freee-design-system'] 
+      }
+    ],
+    aiReason: 'デザインドリブンな組織文化。ユーザー起点のものづくり。',
+    sourceUrl: 'https://jobs.freee.co.jp/'
   },
   { 
     id: '8', 
-    title: 'フルスタックエンジニア', 
-    company: 'Startup X', 
-    description: '新規事業の立ち上げ、0->1開発', 
-    score: 3.5, 
-    location: '東京都', 
-    salary: '600-1000万円', 
-    salaryMinInt: 600,
-    requirements: 'Webアプリ開発経験一通り', 
-    languages: ['TypeScript', 'Ruby'],
-    frameworks: ['Next.js', 'Rails'],
-    infrastructure: ['Heroku', 'Vercel'],
-    workStyles: ['Full Flex'],
-    evaluationItems: [],
-    aiReason: '裁量が大きく、幅広い経験が積める。'
+    title: 'ブロックチェーンエンジニア', 
+    company: '株式会社LayerX', 
+    description: 'ブロックチェーン技術を活用したプロダクト開発。Ethereum/Solidity開発。', 
+    score: 4.6, 
+    location: '東京都中央区', 
+    salary: '700-1400万円', 
+    salaryMinInt: 700,
+    requirements: 'Solidity経験、スマートコントラクト開発経験', 
+    languages: ['Solidity', 'Go', 'TypeScript'],
+    frameworks: ['Hardhat', 'Foundry'],
+    infrastructure: ['AWS', 'GCP'],
+    workStyles: ['フルリモート', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '技術力', 
+        score: 4.7,
+        summary: 'ブロックチェーン技術の最先端を走る。論文執筆・OSS貢献も活発。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0C1000001IFxGs'] 
+      },
+      { 
+        category: '成長環境', 
+        score: 4.5,
+        summary: '経営陣がエンジニア出身。技術投資に積極的。',
+        links: ['https://tech.layerx.co.jp/entry/2023/12/25/000000'] 
+      }
+    ],
+    aiReason: 'Web3領域の最先端技術に携われる希少な環境。',
+    sourceUrl: 'https://layerx.co.jp/jobs/'
   },
   { 
     id: '9', 
     title: 'QAエンジニア', 
-    company: 'Quality First', 
-    description: '自動テスト基盤の構築と運用', 
+    company: '株式会社DeNA', 
+    description: 'ゲーム・エンターテインメント事業のQA基盤構築。自動テストの設計・実装。', 
     score: 4.1, 
-    location: '東京都', 
-    salary: '700-1000万円', 
-    salaryMinInt: 700,
-    requirements: 'E2Eテスト構築経験', 
+    location: '東京都渋谷区', 
+    salary: '600-1000万円', 
+    salaryMinInt: 600,
+    requirements: 'E2Eテスト構築経験、CI/CD経験', 
     languages: ['JavaScript', 'Python'],
     frameworks: ['Playwright', 'Selenium'],
-    infrastructure: ['CircleCI', 'Jenkins'],
-    workStyles: ['Remote'],
-    evaluationItems: [],
-    aiReason: '品質へのこだわりが強く、エンジニアリング組織も成熟している。'
+    infrastructure: ['AWS', 'CircleCI'],
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '技術力', 
+        score: 4.3,
+        summary: 'ゲーム開発で培った高い技術力。社内ツール開発も活発。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0910000000FrU3'] 
+      },
+      { 
+        category: '給与水準', 
+        score: 4.0,
+        summary: '業界水準より高め。成果に応じたインセンティブあり。',
+        links: ['https://engineering.dena.com/blog/2023/12/'] 
+      }
+    ],
+    aiReason: 'エンターテインメント領域での品質管理経験を積める。',
+    sourceUrl: 'https://dena.com/jp/recruit/'
   },
   { 
     id: '10', 
-    title: 'PM / プロダクトマネージャー', 
-    company: 'Global Tech', 
-    description: 'グローバル展開するSaaSのプロダクトマネジメント', 
+    title: 'プロダクトマネージャー', 
+    company: 'ウォンテッドリー株式会社', 
+    description: 'ビジネスSNS「Wantedly」のプロダクトマネジメント。ユーザーインタビューから機能設計まで。', 
     score: 4.4, 
-    location: '東京都', 
-    salary: '1200-1800万円', 
-    salaryMinInt: 1200,
-    requirements: 'SaaSプロダクトのPM経験', 
+    location: '東京都港区', 
+    salary: '700-1200万円', 
+    salaryMinInt: 700,
+    requirements: 'プロダクトマネジメント経験3年以上', 
     languages: [],
     frameworks: [],
     infrastructure: [],
-    workStyles: ['Remote', 'Flex'],
-    evaluationItems: [],
-    aiReason: 'グローバルな視点でプロダクト成長に関われる。'
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '成長環境', 
+        score: 4.5,
+        summary: 'ユーザードリブンな開発文化。データ分析基盤も充実。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0C10000005rVlh'] 
+      },
+      { 
+        category: '社員同士の仲', 
+        score: 4.4,
+        summary: '「シゴトでココロオドル」を体現する組織文化。',
+        links: ['https://www.wantedly.com/companies/wantedly/stories'] 
+      }
+    ],
+    aiReason: 'プロダクト起点の組織で裁量を持って働ける。',
+    sourceUrl: 'https://www.wantedly.com/companies/wantedly/'
   },
   { 
     id: '11', 
-    title: 'セキュリティエンジニア', 
-    company: 'Secure Core', 
-    description: '脆弱性診断とセキュリティ対策の立案', 
-    score: 4.7, 
-    location: 'フルリモート', 
-    salary: '1100-1500万円', 
-    salaryMinInt: 1100,
-    requirements: 'セキュリティ診断経験', 
-    languages: ['Python', 'Shell'],
-    frameworks: [],
-    infrastructure: [],
-    workStyles: ['Full Remote'],
-    evaluationItems: [],
-    aiReason: '高い専門性が求められるが、待遇と環境は最高水準。'
+    title: 'データエンジニア', 
+    company: '株式会社ZOZO', 
+    description: 'ZOZOTOWNのデータ基盤構築。BigQuery/Sparkを使用した大規模データパイプライン開発。', 
+    score: 4.5, 
+    location: '千葉県', 
+    salary: '700-1200万円', 
+    salaryMinInt: 700,
+    requirements: 'データエンジニアリング経験、SQL/Python経験', 
+    languages: ['Python', 'SQL'],
+    frameworks: ['dbt', 'Airflow'],
+    infrastructure: ['GCP', 'BigQuery', 'Dataflow'],
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '技術力', 
+        score: 4.4,
+        summary: '大規模ECデータを扱う技術力。MLOps基盤も整備。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0910000002Pd7p'] 
+      },
+      { 
+        category: '残業時間', 
+        score: 4.2,
+        summary: '平均20時間程度。メリハリのある働き方が可能。',
+        links: ['https://techblog.zozo.com/entry/zozo-data-engineer-team'] 
+      }
+    ],
+    aiReason: '日本最大級のファッションECのデータ基盤に携われる。',
+    sourceUrl: 'https://corp.zozo.com/recruit/'
   },
   { 
     id: '12', 
-    title: '社内SE', 
-    company: 'Legacy Corp', 
-    description: '社内システムの保守運用・DX推進', 
-    score: 3.2, 
-    location: '愛知県', 
-    salary: '400-600万円', 
-    salaryMinInt: 400,
-    requirements: '社内SE経験', 
-    languages: ['Java', 'C#'],
-    frameworks: [],
-    infrastructure: ['On-premise'],
-    workStyles: [],
-    evaluationItems: [],
-    aiReason: '安定した環境だが、技術的な挑戦は限定的かもしれない。'
+    title: 'Androidエンジニア', 
+    company: '楽天グループ株式会社', 
+    description: '楽天市場・楽天ペイなどのAndroidアプリ開発。Kotlin/Javaを使用。', 
+    score: 4.0, 
+    location: '東京都世田谷区', 
+    salary: '600-1100万円', 
+    salaryMinInt: 600,
+    requirements: 'Android開発経験3年以上、Kotlin経験', 
+    languages: ['Kotlin', 'Java'],
+    frameworks: ['Jetpack Compose', 'Dagger'],
+    infrastructure: ['AWS', 'GCP'],
+    workStyles: ['リモート可', 'フレックス'],
+    evaluationItems: [
+      { 
+        category: '安定性', 
+        score: 4.5,
+        summary: '日本最大級のEC企業。多角的な事業展開で安定基盤。',
+        links: ['https://www.openwork.jp/company.php?m_id=a0910000000Frps'] 
+      },
+      { 
+        category: '成長環境', 
+        score: 3.8,
+        summary: '英語公用語化など独自の文化。グローバル経験が積める。',
+        links: ['https://rakuten.today/blog/how-rakuten-made-english-its-business-language.html'] 
+      }
+    ],
+    aiReason: '大規模サービスのモバイル開発経験を積める安定企業。',
+    sourceUrl: 'https://corp.rakuten.co.jp/careers/'
   }
 ];
 

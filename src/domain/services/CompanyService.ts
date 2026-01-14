@@ -16,7 +16,7 @@ export class CompanyService {
     const company = await this.companyRepository.findById(id);
     
     if (!company) {
-      throw new Error('Company not found');
+      throw new Error('企業が見つかりません');
     }
 
     // 1. キャッシュ (DB) を確認

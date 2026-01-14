@@ -166,65 +166,85 @@ Step 3: JSONとして構造化
 }
 ```
 
-#### Stage 2: 候補生成 (Handoff to Grounding)
-
-**Input (from Stage 1)**: 上記のJSONオブジェクト
-
-**Action**: AIがこのJSONを解釈し、Google検索クエリを作成
-
-**Generated Query**:
-`"React" "求人" "案件" 東京 (正社員 OR フリーランス) site:green-japan.com OR site:indeed.com OR site:findy-code.io`
-
-**Result**: このクエリでGoogle検索が実行され、実際の求人ページがHitする。
-```
-
----
-
-### Stage 2: 候補生成（Google Search Grounding）
+### Stage 2: AI求人候補生成（完全無料）
 
 #### 目的
-AI が最適な「検索クエリ」を生成し、Google検索機能（Grounding）を通じてWeb上のあらゆる求人ページから情報を取得する。
-これにより、特定の求人サイトに依存することなく、Indeed、Green、Wantedly、企業の採用ページなど、Web全体の情報を網羅的に探索できる。
+Stage 1で理解したユーザーの意図をもとに、Gemini APIが条件にマッチする求人候補を生成する。
+有料のGoogle Search Groundingは使用せず、完全無料で実行する。
+
+#### 入力変換ロジック (Intent to Natural Language Query)
+Stage 1 で抽出された構造化データ（JSON）の**全てのフィールド**を自然文に変換し、検索クエリとして使用する。これにより、構造化データの持つ意味を漏らさずAIに伝える。
+
+**変換ルール:**
+1. **明示的条件 (Explicit)**
+   - `locations`: "勤務地は[A]または[B]"
+   - `skills`: "[A]、[B]を使用する"
+   - `min_salary`: "年収[X]万円以上"
+
+2. **暗黙的条件 (Implicit)**
+   - `role`: "職種は[Role]"
+   - `employment_type`: "雇用形態は[A]または[B]" (例: 正社員、フリーランス)
+   - `company_size`: "企業規模は[A]または[B]" (例: スタートアップ)
+   - `must_have`: "[A]、[B]" (必須条件の羅列)
+   - `nice_to_have`: "できれば[A]、[B]" (歓迎条件)
+
+3. **除外条件 (Exclude)**
+   - `exclude`: "ただし[A]、[B]は除外"
+
+**生成されるクエリ例:**
+> 「勤務地は東京都または京都府、Reactを使用する、年収800万円以上、職種はフロントエンドエンジニア、雇用形態は正社員、できればフルリモート、副業可、ただしSESは除外という条件で求人を探しています」
 
 #### プロンプト戦略
 
 ```typescript
 const prompt = `
-あなたは優秀なリクルーターです。より多くの適切な求人を見つけるために、Google検索で使用する最適なクエリを作成してください。
+あなたは求人検索の専門家です。以下の条件に合う日本のIT/Web系求人を生成してください。
 
-ユーザーの検索意図:
-${JSON.stringify(intent)}
+【検索条件】
+${searchQuery}
 
-要件:
-1. ユーザーの意図（職種、スキル、勤務地、年収）を反映すること
-2. "求人"、"採用"、"募集" などのキーワードを含めること
-3. 信頼できる求人サイト（Indeed, Green, Wantedly等）や企業の採用ページがヒットするようにすること
-4. 検索クエリは1つだけ出力すること
+【指示】
+1. 条件にマッチする求人を生成してください
+2. 以下のJSON形式で**10件**出力してください
+3. 架空の求人で構いませんが、現実にありそうなリアルな内容にしてください
 
-出力例:
-React エンジニア 東京 年収800万 site:green-japan.com OR site:indeed.com OR site:wantedly.com OR "採用"
+\`\`\`json
+{
+  "jobs": [
+    {
+      "title": "職種名",
+      "company": "企業名",
+      "location": "勤務地",
+      "salary_min": 年収下限(数値),
+      "salary_max": 年収上限(数値),
+      "skills": ["必要スキル"],
+      "source_url": "求人ページのURL（ダミー可）",
+      "description": "求人の魅力的な要約"
+    }
+  ]
+}
+\`\`\`
 `;
 ```
 
-#### 実装例（Google Grounding）
+#### 実装例（AI生成）
 
 ```typescript
-async function generateCandidatesWithGrounding(intent: SearchIntent): Promise<Job[]> {
-  // 1. 検索クエリの生成
-  const queryGenResponse = await gemini.generateContent(buildQueryPrompt(intent));
-  const searchQuery = queryGenResponse.text().trim();
+async function generateCandidatesWithAI(intent: SearchIntent): Promise<Job[]> {
+  // 1. 検索意図全体を自然文に変換（全フィールド活用）
+  const searchQuery = buildIntegratedSearchQuery(intent);
 
-  // 2. Google検索機能（Grounding）を使って検索実行
-  // ※ Gemini API の標準機能として提供されている "Tools" を使用します。
-  // ※ これにより、Geminiが自動的にGoogle検索を行い、その結果を含めて回答を生成します。
+  // 2. Geminiに求人生成を依頼（モデル: gemini-2.0-flash）
   const searchResponse = await gemini.generateContent({
-    contents: [{ role: "user", parts: [{ text: `以下のクエリで最新の求人を検索し、結果をリストアップしてください: ${searchQuery}` }] }],
-    tools: [{ google_search: {} }] // Google Search Grounding を有効化
+    contents: [{ role: "user", parts: [{ text: buildJobGenerationPrompt(searchQuery) }] }],
+    generationConfig: {
+      temperature: 0.4,  // 少し創造性を持たせて多様な求人を出す
+      maxOutputTokens: 8192 // 10件分のJSONを出力するために十分な量を確保
+    }
   });
   
-  // 3. 検索結果から求人情報を抽出
-  // Groundingのレスポンスには検索結果のメタデータ（タイトル、URL、スニペット）が含まれる
-  const candidates = extractJobsFromGroundingResponse(searchResponse);
+  // 3. JSONレスポンスをパース
+  const candidates = parseJobCandidates(searchResponse);
   
   return candidates;
 }
@@ -232,25 +252,142 @@ async function generateCandidatesWithGrounding(intent: SearchIntent): Promise<Jo
 
 ---
 
-### Stage 3: 検証・精緻化（Self-Consistency）
+---
+
+### Stage 3+4: 統合検証（Self-Consistency + 企業評価）
 
 #### 目的
-同一求人を複数回評価し、多数決により誤判定を除去
+求人内容と企業評価を統合的に判断し、同じ条件で3回評価して多数決で信頼性を確保
 
 #### アルゴリズム
 
 ```typescript
-async function evaluateWithSelfConsistency(
-  job: Job,
+async function evaluateJobsWithCompanies(
+  jobs: Job[],
   intent: SearchIntent
-): Promise<{ isMatch: boolean; confidence: number; score: number }> {
+): Promise<ValidatedJob[]> {
   
-  // 同じ質問を異なる表現で3回投げる
-  const prompts = [
-    buildEvaluationPrompt1(job, intent),
-    buildEvaluationPrompt2(job, intent),
-    buildEvaluationPrompt3(job, intent)
-  ];
+  const validatedJobs: ValidatedJob[] = [];
+  
+  for (const job of jobs) {
+    // 同じプロンプトを3回実行（Self-Consistency）
+    const prompt = buildIntegratedEvaluationPrompt(job, intent);
+    
+    const evaluations = await Promise.all([
+      gemini.generateContent(prompt, { temperature: 0.5 }),
+      gemini.generateContent(prompt, { temperature: 0.5 }),
+      gemini.generateContent(prompt, { temperature: 0.5 })
+    ]);
+    
+    // 各評価から結果を抽出
+    const results = evaluations.map(e => parseEvaluationResult(e));
+    
+    // 多数決: 3回中2回以上「recommend: true」なら採用
+    const recommendCount = results.filter(r => r.recommend).length;
+    
+    if (recommendCount >= 2) {
+      validatedJobs.push({
+        ...job,
+        job_match_score: average(results.map(r => r.job_match_score)),
+        company_evaluation: mergeCompanyEvaluations(results),
+        overall_score: average(results.map(r => r.overall_score)),
+        confidence: recommendCount === 3 ? 100 : 67
+      });
+    }
+  }
+  
+  return validatedJobs;
+}
+```
+
+#### 統合プロンプト例
+
+```typescript
+function buildIntegratedEvaluationPrompt(job: Job, intent: SearchIntent): string {
+  // ユーザー関心事項を抽出
+  const concerns = extractUserConcerns(intent);
+  
+  return `
+この求人を、企業の評判も含めて総合的に評価してください。
+
+【ユーザーの検索意図】
+${intent.search_intent_summary}
+
+【ユーザーの関心事項】
+${concerns.join(', ')}
+
+【求人情報】
+企業: ${job.company.name}
+職種: ${job.title}
+スキル: ${job.skills.join(', ')}
+年収: ${job.salary}
+勤務地: ${job.location}
+
+【評価項目】
+1. 求人内容がユーザーの条件に合致しているか（0-100）
+2. 企業がユーザーの関心事項について良好か（0-100）
+3. 総合的に推薦できるか（true/false）
+
+【出力形式】
+JSON形式で出力してください。
+{
+  "job_match_score": 85,
+  "company_concerns": {
+    "残業時間": { "score": 80, "summary": "..." },
+    "チーム雰囲気": { "score": 90, "summary": "..." }
+  },
+  "overall_score": 84,
+  "recommend": true
+}
+
+【出力制約 - 厳守】
+- JSONのみを出力してください
+- コードブロックの囲いは不要です
+- 説明文、前置き、後置きは一切不要です
+  `;
+}
+```
+
+#### 企業評価の統合
+
+```typescript
+function mergeCompanyEvaluations(results: EvaluationResult[]): CompanyEvaluation {
+  const allConcerns: Record<string, ConcernScore[]> = {};
+  
+  // 各評価結果から関心事項を集約
+  results.forEach(result => {
+    Object.entries(result.company_concerns).forEach(([concern, score]) => {
+      if (!allConcerns[concern]) allConcerns[concern] = [];
+      allConcerns[concern].push(score);
+    });
+  });
+  
+  // 平均値を算出
+  const concerns: Record<string, ConcernScore> = {};
+  Object.entries(allConcerns).forEach(([concern, scores]) => {
+    concerns[concern] = {
+      concern,
+      score: Math.round(average(scores.map(s => s.score))),
+      summary: scores[0].summary, // 代表値
+      sources: [...new Set(scores.flatMap(s => s.sources || []))]
+    };
+  });
+  
+  return {
+    concerns,
+    overall_score: Math.round(average(results.map(r => r.overall_score)))
+  };
+}
+```
+
+#### 今回の統合のメリット
+
+1. **API呼び出し回数削減**: 7回 → 5回（28%削減）
+2. **総合的なSelf-Consistency**: 求人内容と企業評価を一緒に検証
+3. **精度向上**: 企業評価も含めた多数決で信頼性が高まる
+4. **自然な判断**: 「求人は良いが企業がイマイチ」を適切に除外
+
+
 
   const results = await Promise.all(
     prompts.map(async (prompt) => {
@@ -328,24 +465,144 @@ ${JSON.stringify(job)}
 
 ---
 
-### Stage 4: 企業評価（Multi-AI 統合）
+###  Stage 4: 企業評価（ユーザー意図に基づく動的評価）
 
 #### 目的
-複数 AI で多角的に企業を評価し、偏りを減らす
+ユーザーの検索条件から抽出した関心事項について企業を多角的に評価
 
-#### 実装例
+#### アルゴリズム
 
 ```typescript
-async function evaluateCompany(
+async function evaluateCompanyForUserConcerns(
   companyName: string,
   intent: SearchIntent
 ): Promise<CompanyEvaluation> {
   
-  // 並列で Gemini と Claude に評価を依頼
-  const [geminiEval, claudeEval] = await Promise.all([
-    evaluateWithGemini(companyName, intent),
-    evaluateWithClaude(companyName, intent)
+  // 1. ユーザーの関心事項を抽出
+  const concerns = extractUserConcerns(intent);
+  // 例: ["残業時間", "チーム雰囲気", "有給取得"]
+  
+  // 2. 2つの異なる観点から評価（並列実行）
+  const [directEval, criticalEval] = await Promise.all([
+    evaluateCompanyDirect(companyName, concerns),    // 直接的評価
+    evaluateCompanyCritical(companyName, concerns)   // 批判的検証
   ]);
+  
+  // 3. 結果を統合
+  const evaluation = mergeConcernEvaluations(directEval, criticalEval);
+  
+  return evaluation;
+}
+
+// ユーザーの関心事項を抽出
+function extractUserConcerns(intent: SearchIntent): string[] {
+  const concerns: string[] = [];
+  
+  if (intent.implicit?.must_have) {
+    concerns.push(...intent.implicit.must_have);
+  }
+  
+  if (intent.implicit?.nice_to_have) {
+    concerns.push(...intent.implicit.nice_to_have);
+  }
+  
+  // デフォルト（条件がない場合）
+  if (concerns.length === 0) {
+    concerns.push('技術力', '働きやすさ', '成長機会');
+  }
+  
+  return [...new Set(concerns)].slice(0, 5); // 最大5つ
+}
+```
+
+#### プロンプト例
+
+**1回目: 直接的評価**
+```
+企業「SmartHR」について、ユーザーが気にしている以下の観点で評価してください。
+
+【評価項目】
+1. 残業時間
+2. チーム雰囲気
+3. 有給取得
+
+【指示】
+- 各項目について0-100点で評価してください
+- 評価の根拠となる公開情報があれば明示してください
+
+【出力形式】
+JSON形式で出力してください。
+{
+  "concerns": {
+    "残業時間": {
+      "score": 85,
+      "summary": "平均残業時間は月20時間程度",
+      "sources": ["https://..."]
+    },
+    ...
+  }
+}
+
+【出力制約 - 厳守】
+- JSONのみを出力してください
+- コードブロックの囲いは不要です
+- 説明文、前置き、後置きは一切不要です
+```
+
+**2回目: 批判的検証**
+```
+企業「SmartHR」について、以下の観点で批判的に検証してください。
+
+【検証項目】
+1. 残業時間に関する懸念点や問題がないか
+2. チーム雰囲気に関する懸念点や問題がないか
+...
+
+【指示】
+- 問題がある場合は低いスコアをつけてください
+- 問題がない場合は高いスコアをつけてください
+
+【出力形式】
+JSON形式で出力してください。
+
+【出力制約 - 厳守】
+- JSONのみを出力してください
+-  コードブロックの囲いは不要です
+- 説明文は一切不要です
+```
+
+#### 統合ロジック
+
+```typescript
+function mergeConcernEvaluations(
+  directEval: Record<string, ConcernScore>,
+  criticalEval: Record<string, ConcernScore>
+): CompanyEvaluation {
+  const concerns: Record<string, ConcernScore> = {};
+  let totalScore = 0;
+  
+  for (const concern in directEval) {
+    const directScore = directEval[concern]?.score || 50;
+    const criticalScore = criticalEval[concern]?.score || 50;
+    const avgScore = Math.round((directScore + criticalScore) / 2);
+    
+    concerns[concern] = {
+      concern,
+      score: avgScore,
+      summary: directEval[concern]?.summary || '評価情報なし',
+      sources: directEval[concern]?.sources || []
+    };
+    
+    totalScore += avgScore;
+  }
+  
+  return {
+    concerns,
+    overall_score: Object.keys(concerns).length > 0 
+      ? Math.round(totalScore / Object.keys(concerns).length)
+      : 0
+  };
+}
 
   // 統合
   return {

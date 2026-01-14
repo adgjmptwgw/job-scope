@@ -9,32 +9,17 @@ import {
   JobWithCompanyEvaluation
 } from './IGeminiClient';
 import { SearchIntent } from '../../domain/types/SearchIntent';
-import { getMockSearchIntent, getMockJobs, getMockEvaluations } from './GeminiClientMock';
 
 /**
  * Gemini API クライアント
- * 
- * What: Google Gemini APIとの通信を管理し、AI検索の各ステージ（意図理解、候補生成、統合検証）を実行するクラス
- * Why: APIキー管理、リトライ処理、エラーハンドリングなどのインフラ層の関心事をこのクラスに集約し、
- *      ドメイン層（SearchService等）がビジネスロジックに集中できるようにするため。
- *      また、モデルの切り替え（Flash vs Pro）やフォールバック戦略もここで制御する。
+ * Stage 1 は実際のAPIを使用、Stage 2-4 はモック実装
  */
 export class GeminiClient implements IGeminiClient {
   private apiKey: string;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  private isDemoMode: boolean;
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
-    
-    // NEXT_PUBLIC_DEMO_MODE環境変数でデモモードを判定
-    this.isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
-    
-    if (this.isDemoMode) {
-      console.error('\n🎭 ========================================');
-      console.error('🎭 [DEMO MODE] Gemini APIモック使用');
-      console.error('🎭 ========================================\n');
-    }
   }
 
   /**
@@ -87,15 +72,6 @@ export class GeminiClient implements IGeminiClient {
     console.error('========================================');
     console.error('📝 入力クエリ:', query);
     
-    // デモモード時はモックを返す
-    if (this.isDemoMode) {
-      const mockIntent = await getMockSearchIntent(query);
-      console.error('\n✅ モック検索意図:');
-      console.error(JSON.stringify(mockIntent, null, 2));
-      console.error('========================================\n');
-      return mockIntent;
-    }
-    
     const prompt = this.buildCoTPrompt(query);
     
     try {
@@ -119,7 +95,7 @@ export class GeminiClient implements IGeminiClient {
       // 空レスポンスのチェック
       if (!text || text.trim() === '{}' || text.trim() === '') {
         console.error('⚠️ Gemini APIが空のレスポンスを返しました');
-        throw new Error('Gemini APIから空の応答が返されました');
+        throw new Error('Gemini API returned empty response');
       }
       
       // JSON部分を抽出
@@ -128,7 +104,7 @@ export class GeminiClient implements IGeminiClient {
       
       if (!jsonText) {
         console.error('❌ JSONが見つかりませんでした。レスポンス:', text.substring(0, 200));
-        throw new Error('応答から有効なJSONが見つかりませんでした');
+        throw new Error('No valid JSON found in response');
       }
       
       const parsed = JSON.parse(jsonText);
@@ -160,34 +136,25 @@ export class GeminiClient implements IGeminiClient {
   }
 
   /**
-   * Stage 2: AI求人候補生成
-   * Geminiに条件にマッチする求人を1回だけ生成させる（10件程度）
+   * Stage 2: Google Search Grounding を使った求人検索
+   * Gemini APIのGoogle Search Grounding機能を使用して実際の求人情報を検索する
    */
   async searchWithGrounding(query: string): Promise<any[]> {
     console.error('\n========================================');
-    console.error('💬 [Stage 2] AI求人候補生成');
+    console.error('🔍 [Stage 2] Google Search Grounding');
     console.error('========================================');
-    console.error('📝 検索条件:', query);
+    console.error('📝 検索クエリ:', query);
     
-    // デモモード時はモックを返す
-    if (this.isDemoMode) {
-      // queryから意図を抽出
-      const intent = await getMockSearchIntent(query);
-      const mockJobs = await getMockJobs(intent);
-      console.error(`\n✅ ${mockJobs.length}件のモック求人を生成`);
-      console.error('========================================\n');
-      return mockJobs;
-    }
-    
-    // プロンプト: 10件の求人を生成
-    const prompt = `あなたは求人検索の専門家です。以下の条件に合う日本のIT/Web系求人を生成してください。
+    // プロンプト: 検索結果に基づいてJSONを生成するよう指示
+    const prompt = `あなたは求人検索の専門家です。Google検索を活用して、実在する最新の求人情報を探してください。
+以下の条件に合う日本のIT/Web系求人を検索してください。
 
 【検索条件】
 ${query}
 
 【指示】
-1. 条件にマッチする求人を生成してください
-2. 以下のJSON形式で**10件**出力してください
+1. 検索で見つかった実際の求人情報のみを使用してください。架空の求人は作成しないでください。
+2. 以下のJSON形式で最大5件出力してください。
 \`\`\`json
 {
   "jobs": [
@@ -198,23 +165,19 @@ ${query}
       "salary_min": 年収下限(数値または0),
       "salary_max": 年収上限(数値または0),
       "skills": ["必要スキル"],
-      "source_url": "求人ページのURL（参考）",
+      "source_url": "求人ページのURL",
       "description": "求人の要約"
     }
   ]
 }
 \`\`\`
-
-【注意】
-- 各求人はユーザーの条件に合うように作成してください
-- source_urlは参考情報として生成してください
 `;
 
     try {
-      console.error('🔄 Gemini API を呼び出し中...');
+      console.error('🔄 Gemini API (with Grounding) を呼び出し中...');
       
-      // 普通のAI生成として実行
-      const response = await this.generateContentWithRetry(prompt, 0.3, 8192);
+      // Groundingツールを有効にしてリクエスト
+      const response = await this.generateContentWithRetry(prompt, 0.3, 4096, true);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -230,38 +193,22 @@ ${query}
       console.error(text.substring(0, 500) + '...');
       console.error('---');
       
+      // グラウンディングメタデータをログ（検索クエリや参照元が表示される）
+      const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
+      if (groundingMetadata) {
+        console.error('\n🌐 グラウンディング情報:');
+        console.error('Web検索クエリ:', groundingMetadata.webSearchQueries || []);
+        console.error('参照チャンク数:', groundingMetadata.groundingChunks?.length || 0);
+      } else {
+        console.warn('⚠️ グラウンディングメタデータがありません (検索が実行されなかった可能性があります)');
+      }
+      
       // JSON部分を抽出
       const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
       const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : '{"jobs":[]}';
       
       let parsed;
-      try {
-        parsed = JSON.parse(jsonText);
-      } catch (parseError: any) {
-        console.error('❌ JSONパースエラー:', parseError.message);
-        console.error('📄 JSONテキスト (最初の1000文字):', jsonText.substring(0, 1000));
-        
-        // JSONが不完全な場合（配列が閉じていない）、修復を試みる
-        try {
-          let fixedJson = jsonText.trim();
-          // jobs配列が閉じていない場合
-          if (fixedJson.includes('"jobs"') && !fixedJson.endsWith(']}')) {
-            fixedJson = fixedJson + ']}';
-          }
-          parsed = JSON.parse(fixedJson);
-          console.error('✅ JSON修復成功');
-        } catch (retryError) {
-          console.error('❌ JSON修復失敗。空配列を返します');
-          console.error('========================================\n');
-          return [];
-        }
-      }
       const jobs = parsed.jobs || [];
-      
-      console.error(`\n📊 パース結果: jobs配列の長さ = ${jobs.length}`);
-      if (jobs.length > 0) {
-        console.error(`📝 最初の求人: ${jobs[0].title} @ ${jobs[0].company}`);
-      }
       
       // 結果の整形
       const results = jobs.map((job: any, idx: number) => ({
@@ -815,7 +762,7 @@ ${query}
    例: 
    - "残業が少ない" → must_have: ["ワークライフバランス"]
    - "スタートアップ" → company_size: ["Startup"]
-   - "React経験者" → role: "フロントエンドエンジニア", min_salary: 6000000（推測）
+   - "React経験者" → role: "Frontend Engineer", min_salary: 6000000（推測）
    
 3. 除外条件があれば抽出してください
    例: "ただしSESは除外" → exclude: ["SES"]
@@ -832,7 +779,7 @@ JSON形式で出力してください。コードブロックや説明文は一�
     "min_salary": 数値またはnull
   },
   "implicit": {
-    "role": "推測される職種（日本語、例: フロントエンドエンジニア）",
+    "role": "推測される職種",
     "employment_type": ["正社員など"],
     "min_salary": null,
     "company_size": ["Startup", "Enterprise", "SME"],
@@ -919,11 +866,13 @@ ${query}
   private async generateContentWithRetry(
     prompt: string, 
     temperature: number, 
-    maxOutputTokens: number
+    maxOutputTokens: number,
+    useGrounding: boolean = false
   ): Promise<Response> {
     const models = [
       'models/gemini-2.5-flash-lite',  // 最軽量・最速（優先）
-      'models/gemini-2.5-flash'        // 標準（フォールバック）
+      'models/gemini-2.5-flash',       // 標準（フォールバック1）
+      'models/gemini-3-flash'          // 最新世代（フォールバック2）
     ];
     const maxRetries = 2; // 無料枠の1日あたり制限を考慮し、リトライ回数を削減
     let lastError: any = null;
@@ -948,6 +897,9 @@ ${query}
                   contents: [{
                     parts: [{ text: prompt }]
                   }],
+                  tools: useGrounding ? [{
+                    googleSearch: {}
+                  }] : [],
                   generationConfig: {
                     temperature,
                     topP: 0.8,
@@ -963,15 +915,10 @@ ${query}
               return response;
             }
 
-            // 429 Rate Limit: 指数バックオフまたは固定時間（無料版）でリトライ
+            // 429 Rate Limit: 指数バックオフでリトライ
             if (response.status === 429) {
-              const isFreeTier = process.env.IS_GEMINI_FREE === 'true';
-              // 無料版は一律60秒、有料版は指数バックオフ
-              const waitTime = isFreeTier ? 60000 : Math.pow(2, attempt) * 5000;
-              
-              const modeLabel = isFreeTier ? 'Free Tier (Fixed 60s)' : 'Standard (Exponential Backoff)';
-              console.warn(`⏳ [Gemini] Rate limit (429). Mode: ${modeLabel}, ${waitTime/1000}秒後にリトライ...`);
-              
+              const waitTime = Math.pow(2, attempt) * 5000; // 5秒, 10秒... (間隔を広げて回数を減らす)
+              console.warn(`⏳ [Gemini] Rate limit (429). ${waitTime/1000}秒後にリトライ...`);
               await this.sleep(waitTime);
               continue; // 同じモデルでリトライ
             }
@@ -989,9 +936,9 @@ ${query}
           } catch (fetchError: any) {
             clearTimeout(timeoutId);
             if (fetchError.name === 'AbortError') {
-              console.warn(`[Gemini] Timeout with model ${model}. Retrying...`);
-              lastError = new Error(`モデル ${model} との通信がタイムアウトしました`);
-              continue; // タイムアウト時はリトライする
+              console.warn(`[Gemini] Timeout with model ${model}. Trying next model...`);
+              lastError = new Error(`Timeout with model ${model}`);
+              break; // 次のモデルへ
             } else {
               throw fetchError;
             }
@@ -1007,7 +954,7 @@ ${query}
     if (lastError instanceof Response) {
       return lastError;
     }
-    throw lastError || new Error('すべてのモデルで処理に失敗しました');
+    throw lastError || new Error('All models failed');
   }
 
   /**
@@ -1030,16 +977,7 @@ ${query}
     console.log('========================================');
     console.log(`📋 候補数: ${candidates.length}件`);
     
-    // デモモード時はモックを返す
-    if (this.isDemoMode) {
-      const mockEvaluations = await getMockEvaluations(candidates, intent);
-      console.log(`\n✅ ${mockEvaluations.length}件のモック評価を生成`);
-      console.log('========================================\n');
-      return mockEvaluations;
-    }
-    
     const validatedJobs: JobWithCompanyEvaluation[] = [];
-
     
     for (const job of candidates) {
       try {
@@ -1164,22 +1102,11 @@ ${concerns.slice(0, 5).map(c => `    "${c}": { "score": 80, "summary": "..." }`)
    */
   private parseIntegratedEvaluationResult(text: string): IntegratedEvaluationResult {
     try {
-      // まずコードブロック（```json ... ```）を除去
-      let cleanedText = text.trim();
+      // JSONを抽出
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
+      const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : text;
       
-      // ```json から ``` までを抽出
-      const codeBlockMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (codeBlockMatch) {
-        cleanedText = codeBlockMatch[1].trim();
-      }
-      
-      // それでも残っている場合は { から } までを抽出
-      if (!cleanedText.startsWith('{')) {
-        const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
-        cleanedText = jsonMatch ? jsonMatch[0] : cleanedText;
-      }
-      
-      const parsed = JSON.parse(cleanedText);
+      const parsed = JSON.parse(jsonText);
       
       return {
         job_match_score: parsed.job_match_score || 50,
@@ -1189,7 +1116,6 @@ ${concerns.slice(0, 5).map(c => `    "${c}": { "score": 80, "summary": "..." }`)
       };
     } catch (error) {
       console.error('JSON parse error:', error);
-      console.error('問題のあるテキスト:', text.substring(0, 200));
       // デフォルト値
       return {
         job_match_score: 50,

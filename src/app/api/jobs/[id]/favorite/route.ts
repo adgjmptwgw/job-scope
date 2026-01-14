@@ -11,8 +11,13 @@ export async function POST(request: NextRequest, props: Props) {
   const params = await props.params;
   try {
     const { id: jobId } = params;
+    
+    console.log('\n📡 API REQUEST: POST /api/jobs/[id]/favorite');
+    console.log('⏰ timestamp:', new Date().toISOString());
+    console.log('📝 job_id:', jobId);
 
     if (!jobId) {
+      console.log('❌ validation_error: job_id is required');
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
     }
 
@@ -21,8 +26,11 @@ export async function POST(request: NextRequest, props: Props) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      console.log('❌ auth_error:', authError?.message || 'user not found');
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
     }
+    
+    console.log('👤 user_id:', user.id);
 
     // Dependency Injection
     const favoriteRepository = new SupabaseJobFavoriteRepository(supabase);
@@ -38,7 +46,7 @@ export async function POST(request: NextRequest, props: Props) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
     
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }
 
@@ -46,9 +54,14 @@ export async function DELETE(request: NextRequest, props: Props) {
   const params = await props.params;
   try {
     const { id: jobId } = params;
+    
+    console.log('\n📡 API REQUEST: DELETE /api/jobs/[id]/favorite');
+    console.log('⏰ timestamp:', new Date().toISOString());
+    console.log('📝 job_id:', jobId);
 
     if (!jobId) {
-      return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+      console.log('❌ validation_error: id is required');
+      return NextResponse.json({ error: 'IDが必要です' }, { status: 400 });
     }
 
     // 認証チェック
@@ -56,8 +69,11 @@ export async function DELETE(request: NextRequest, props: Props) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      console.log('❌ auth_error:', authError?.message || 'user not found');
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
     }
+    
+    console.log('👤 user_id:', user.id);
 
     // Dependency Injection
     const favoriteRepository = new SupabaseJobFavoriteRepository(supabase);
@@ -68,6 +84,6 @@ export async function DELETE(request: NextRequest, props: Props) {
     return NextResponse.json({ message: 'Removed from favorites' });
   } catch (error) {
     console.error('Error in DELETE /api/jobs/[id]/favorite:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }

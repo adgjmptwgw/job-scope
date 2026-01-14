@@ -12,7 +12,7 @@ export class FavoriteService {
     // 既に存在チェック
     const exists = await this.favoriteRepository.exists(userId, jobId);
     if (exists) {
-      throw new Error('Already in favorites');
+      throw new Error('すでにお気に入りに登録されています');
     }
 
     await this.favoriteRepository.create({ user_id: userId, job_id: jobId });

@@ -38,7 +38,7 @@ export class SupabaseSearchHistoryRepository implements ISearchHistoryRepository
       .single();
 
     if (error || !data) {
-      throw new Error('Failed to create search history');
+      throw new Error('検索履歴の保存に失敗しました');
     }
 
     return {

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, props: Props) {
     const { id } = params;
 
     if (!id) {
-      return NextResponse.json({ error: 'Company ID is required' }, { status: 400 });
+      return NextResponse.json({ error: '企業IDが必要です' }, { status: 400 });
     }
 
     // Dependency Injection
@@ -35,6 +35,6 @@ export async function GET(request: NextRequest, props: Props) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
     
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }

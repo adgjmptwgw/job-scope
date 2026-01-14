@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: 'メールアドレスとパスワードが必要です' },
         { status: 400 }
       );
     }
@@ -26,11 +26,20 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      // エラーメッセージを日本語化
+      let errorMessage = 'アカウント作成に失敗しました';
+      if (error.message.includes('already registered')) {
+        errorMessage = 'このメールアドレスはすでに登録されています';
+      } else if (error.message.includes('Password')) {
+        errorMessage = 'パスワードは6文字以上で入力してください';
+      } else if (error.message.includes('Invalid email')) {
+        errorMessage = '無効なメールアドレスです';
+      }
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     if (!data.user) {
-      return NextResponse.json({ error: 'Signup failed' }, { status: 500 });
+      return NextResponse.json({ error: 'アカウント作成に失敗しました' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -40,6 +49,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error in POST /api/auth/signup:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 });
   }
 }

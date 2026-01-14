@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { AISearchLoading } from "@/components/search/AISearchLoading";
 import { AISearchInsight } from "@/components/search/AISearchInsight";
 import { AIJobCard } from "@/components/search/AIJobCard";
+import { useSearchStorage } from "@/hooks/useSearchStorage";
 
 interface SearchHistoryItem {
   id: string;
@@ -43,12 +44,15 @@ const SearchScreen: React.FC = () => {
   const [locationInputKey, setLocationInputKey] = useState(0);
   const techInputRef = useRef<HTMLInputElement>(null);
   const locationInputRef = useRef<HTMLInputElement>(null);
+  const naturalLanguageInputRef = useRef<HTMLTextAreaElement>(null);
+  const loadingSectionRef = useRef<HTMLDivElement>(null);
   const [minSalary, setMinSalary] = useState(0);
   const [selectedWorkStyles, setSelectedWorkStyles] = useState<string[]>([]);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   
   // AI検索結果
   const [aiIntent, setAiIntent] = useState<any>(null); // AI解釈結果
@@ -107,6 +111,20 @@ const SearchScreen: React.FC = () => {
         subscription.unsubscribe();
     };
   }, []);
+  // カスタムフックを使用して検索結果を管理
+  const { saveResults, restoreOnMount, clearResults } = useSearchStorage();
+  
+  // sessionStorageから検索結果を復元（詳細画面から戻った時用）
+  useEffect(() => {
+    const restored = restoreOnMount();
+    if (restored.results && restored.hasSearched) {
+      setAiResults(restored.results);
+      setHasSearched(true);
+      if (restored.intent) {
+        setAiIntent(restored.intent);
+      }
+    }
+  }, [restoreOnMount]);
   
   // 履歴保存中かどうかを管理するRef (二重保存防止)
   const isSavingHistory = useRef(false);
@@ -162,6 +180,18 @@ const SearchScreen: React.FC = () => {
     }
 
     // 検索に使用するパラメータ（引数で渡されたものがあればそれを、なければ現在のStateを使用）
+    useEffect(() => {
+    console.log('Search state changed:', {
+        naturalLanguageSearch,
+        excludeConditions,
+        selectedTechTags,
+        selectedLocationTags,
+        minSalary,
+        selectedWorkStyles
+    });
+  }, [naturalLanguageSearch, excludeConditions, selectedTechTags, selectedLocationTags, minSalary, selectedWorkStyles]);
+
+
     const searchParams = conditions || {
         naturalLanguageSearch,
         excludeConditions,
@@ -185,7 +215,7 @@ const SearchScreen: React.FC = () => {
       // 実際のAPIコール
       const response = await fetch(`/api/jobs?${params.toString()}`);
       if (!response.ok) {
-        throw new Error('Search failed');
+        throw new Error('検索に失敗しました');
       }
 
       const data = await response.json();
@@ -251,21 +281,74 @@ const SearchScreen: React.FC = () => {
       e.preventDefault();
     }
     
-    // 自然文クエリがあればAI検索を実行
-    if (naturalLanguageSearch.trim()) {
-      await executeAISearch(naturalLanguageSearch);
+    // バリデーション: 自然文検索は必須
+    if (!naturalLanguageSearch.trim()) {
+      setValidationError('AI検索を行うには、自然文検索条件を入力してください');
+      // エラー箇所までスムーズにスクロールし、フォーカスを当てる
+      if (naturalLanguageInputRef.current) {
+        naturalLanguageInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        naturalLanguageInputRef.current.focus();
+      }
       return;
     }
     
-    // 詳細条件のみの場合は通常検索
-    await executeSearch({
-        naturalLanguageSearch,
-        excludeConditions,
-        selectedTechTags,
-        selectedLocationTags,
-        minSalary,
-        selectedWorkStyles
-    }, true);
+    // バリデーションエラーをクリア
+    setValidationError(null);
+    
+    // AI検索を実行
+    await executeAISearch(naturalLanguageSearch);
+  };
+
+  /**
+   * What: フィルター条件を自然文検索クエリに統合する
+   * Why: 仕様書に従い、全ての検索条件を統合してAIに解釈させるため
+   */
+  const buildIntegratedSearchQuery = (
+    naturalLanguageSearch: string,
+    selectedTechTags: string[],
+    selectedLocationTags: string[],
+    minSalary: number,
+    selectedWorkStyles: string[],
+    excludeConditions: string
+  ): string => {
+    const parts: string[] = [];
+    
+    // 自然文検索（ベース）
+    if (naturalLanguageSearch.trim()) {
+      parts.push(naturalLanguageSearch.trim());
+    }
+    
+    // 勤務地
+    if (selectedLocationTags.length > 0) {
+      parts.push(`勤務地は${selectedLocationTags.join('または')}`);
+    }
+    
+    // 技術スタック
+    if (selectedTechTags.length > 0) {
+      parts.push(`${selectedTechTags.join('、')}を使用する`);
+    }
+    
+    // 年収
+    if (minSalary > 0) {
+      parts.push(`年収${minSalary}万円以上`);
+    }
+    
+    // 働き方
+    if (selectedWorkStyles.length > 0) {
+      parts.push(`働き方は${selectedWorkStyles.join('、')}`);
+    }
+    
+    // 除外条件
+    if (excludeConditions.trim()) {
+      parts.push(`ただし${excludeConditions.trim()}は除外`);
+    }
+    
+    // 条件がない場合
+    if (parts.length === 0) {
+      return '求人を探しています';
+    }
+    
+    return parts.join('、') + 'という条件で求人を探しています';
   };
 
   /**
@@ -282,11 +365,36 @@ const SearchScreen: React.FC = () => {
     setHasSearched(false);
     
     try {
-      const response = await fetch(`/api/search/cot?q=${encodeURIComponent(query)}`);
+      // ログ出力: 検索条件の詳細
+      console.log('\n🔍 ========== AI検索リクエスト開始 ==========');
+      console.log('📝 入力された検索条件:');
+      console.log('  ├─ 自然文検索:', query || '(なし)');
+      console.log('  ├─ 技術スタック:', selectedTechTags.length > 0 ? selectedTechTags.join(', ') : '(なし)');
+      console.log('  ├─ 勤務地:', selectedLocationTags.length > 0 ? selectedLocationTags.join(', ') : '(なし)');
+      console.log('  ├─ 希望年収:', minSalary > 0 ? `${minSalary}万円以上` : '(なし)');
+      console.log('  ├─ 働き方:', selectedWorkStyles.length > 0 ? selectedWorkStyles.join(', ') : '(なし)');
+      console.log('  └─ 除外条件:', excludeConditions || '(なし)');
+      
+      // フィルター条件を統合した完全なクエリを生成
+      const integratedQuery = buildIntegratedSearchQuery(
+        query,
+        selectedTechTags,
+        selectedLocationTags,
+        minSalary,
+        selectedWorkStyles,
+        excludeConditions
+      );
+      
+      console.log('\n🤖 統合クエリ (AI送信用):');
+      console.log('  「' + integratedQuery + '」');
+      console.log('  (文字数:', integratedQuery.length, '文字)');
+      console.log('==========================================\n');
+      
+      const response = await fetch(`/api/search/cot?q=${encodeURIComponent(integratedQuery)}`);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'AI Search failed');
+        throw new Error(errorData.error || 'AI検索に失敗しました');
       }
       
       const data = await response.json();
@@ -294,6 +402,9 @@ const SearchScreen: React.FC = () => {
       if (data.success) {
         setAiIntent(data.data.intent);
         setAiResults(data.data.candidates);
+        
+        // sessionStorageに保存（詳細画面から戻った時用）
+        saveResults(data.data.candidates, data.data.intent);
       }
       
       setHasSearched(true);
@@ -685,16 +796,33 @@ const SearchScreen: React.FC = () => {
               <div className="grid gap-3">
                 <Label htmlFor="search" className="flex items-center gap-2 text-lg font-bold leading-relaxed tracking-wide text-foreground/90">
                   <Sparkles className="w-5 h-5 text-primary" />
-                  自然文検索条件
+                  自然文検索条件<span className="text-red-500 ml-1">*</span>
                 </Label>
                 <Textarea
                   id="search"
+                  ref={naturalLanguageInputRef}
                   rows={4}
                   className="resize-none text-base h-auto min-h-[120px] rounded-xl border-2 px-4 py-3 bg-card/50 leading-relaxed"
                   placeholder="例: リモートワーク可能で、ReactとTypeScriptを使った開発経験が3年以上ある企業の求人"
                   value={naturalLanguageSearch}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNaturalLanguageSearch(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                    setNaturalLanguageSearch(e.target.value);
+                    // 入力があればバリデーションエラーをクリア
+                    if (validationError && e.target.value.trim()) {
+                      setValidationError(null);
+                    }
+                  }}
                 />
+                {validationError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 text-red-500 text-sm font-medium bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-900"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    {validationError}
+                  </motion.div>
+                )}
               </div>
 
               {/* 詳細フィルター切り替え */}
@@ -988,7 +1116,6 @@ const SearchScreen: React.FC = () => {
         </Card>
       </motion.div>
 
-      {/* AI検索ローディング */}
       <AnimatePresence>
         {isSearching && (
           <AISearchLoading isLoading={isSearching} />
